@@ -26,20 +26,84 @@ See options/base_options.py and options/test_options.py for more test options.
 See training and test tips at: https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix/blob/master/docs/tips.md
 See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix/blob/master/docs/qa.md
 """
+
 import os
+import torch
+import numpy as np
 from options.test_options import TestOptions
 from data import create_dataset
 from models import create_model
 from util.visualizer import save_images
 from util import html
+from torchmetrics.image import StructuralSimilarityIndexMeasure
+import matplotlib.pyplot as plt
+from torch import nn
+from torch.nn import functional as F
+import torch.utils.data
+from torchmetrics.image.fid import FrechetInceptionDistance
+from torchmetrics.image.inception import InceptionScore
+from scipy.stats import entropy
+from torchvision.models import inception_v3
+from cleanfid import fid
+from torchvision.transforms import functional as TF
+import csv
+
+def bootstrap_fid(real_images, fake_images, n_bootstrap=100):
+    # Check if GPU is available and set the device accordingly
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Running on device: {device}")
+
+    # Move the images to the specified device (GPU if available)
+    real_images = real_images.to(device)
+    fake_images = fake_images.to(device)
+
+    n_samples = real_images.shape[0]
+    fid_scores = []
+
+    for i in range(n_bootstrap):
+        # Sample indices with replacement
+        sampled_indices = np.random.choice(n_samples, n_samples, replace=True)
+        print(f"{i+1} / {n_bootstrap}")
+
+        # Resample the images
+        real_resampled = real_images[sampled_indices].to(device)
+        fake_resampled = fake_images[sampled_indices].to(device)
+        
+        # Initialize FID object (does not need the device parameter)
+        fid = FrechetInceptionDistance(feature=2048)
+        fid = fid.to(device)  # Move the FID object to the correct device manually
+        fid.update(real_resampled, real=True)
+        fid.update(fake_resampled, real=False)
+        
+        # Compute FID for the resampled set
+        fid_score = fid.compute()
+        fid_scores.append(fid_score.item())  # Convert tensor to Python scalar
+
+    return fid_scores
 
 try:
     import wandb
 except ImportError:
     print('Warning: wandb package cannot be found. The option "--use_wandb" will result in error.')
 
-
 if __name__ == '__main__':
+
+    # Paths to your image folders
+    folder_fake = 'monet2photo_fake_B'  # Update this path
+    folder_real = 'monet2photo_real_B'  # Update this path
+
+    # Compute the FID score
+    # score = fid.compute_fid(folder_fake, folder_real)
+
+    # print(score)
+
+    fake_A_images = []
+    fake_B_images = []
+    real_A_images = []
+    real_B_images = []
+    cycle_images = []
+    inception = InceptionScore()
+
     opt = TestOptions().parse()  # get test options
     # hard-code some parameters for test
     opt.num_threads = 0   # test code only supports num_threads = 0
@@ -62,19 +126,57 @@ if __name__ == '__main__':
         web_dir = '{:s}_iter{:d}'.format(web_dir, opt.load_iter)
     print('creating web directory', web_dir)
     webpage = html.HTML(web_dir, 'Experiment = %s, Phase = %s, Epoch = %s' % (opt.name, opt.phase, opt.epoch))
-    # test with eval mode. This only affects layers like batchnorm and dropout.
-    # For [pix2pix]: we use batchnorm and dropout in the original pix2pix. You can experiment it with and without eval() mode.
-    # For [CycleGAN]: It should not affect CycleGAN as CycleGAN uses instancenorm without dropout.
-    if opt.eval:
-        model.eval()
+
+    scores = []
     for i, data in enumerate(dataset):
         if i >= opt.num_test:  # only apply our model to opt.num_test images.
             break
         model.set_input(data)  # unpack data from data loader
         model.test()           # run inference
+        fake_A_images.append(model.fake_A)
+        fake_B_images.append(model.fake_B)
+        real_A_images.append(model.real_A)
+        real_B_images.append(model.real_B)
+        cycle_images.append(model.rec_A)
         visuals = model.get_current_visuals()  # get image results
         img_path = model.get_image_paths()     # get image paths
         if i % 5 == 0:  # save images to an HTML file
             print('processing (%04d)-th image... %s' % (i, img_path))
         save_images(webpage, visuals, img_path, aspect_ratio=opt.aspect_ratio, width=opt.display_winsize, use_wandb=opt.use_wandb)
     webpage.save()  # save the HTML
+
+    real_A_images_tensor = ((torch.cat(real_A_images, dim=0) + 1) * 0.5 * 255).byte().cpu()
+    fake_A_images_tensor = ((torch.cat(fake_A_images, dim=0) + 1) * 0.5 * 255).byte().cpu()
+    real_B_images_tensor = ((torch.cat(real_B_images, dim=0) + 1) * 0.5 * 255).byte().cpu()
+    fake_B_images_tensor = ((torch.cat(fake_B_images, dim=0) + 1) * 0.5 * 255).byte().cpu()
+
+    fid_scores = bootstrap_fid(real_B_images_tensor, fake_B_images_tensor)
+    print("Mean FID:", np.mean(fid_scores))
+    print("FID Std Dev:", np.std(fid_scores))
+
+    inception.update(fake_B_images_tensor)
+    print("Inception Score: ", inception.compute())
+
+    fid = FrechetInceptionDistance(feature=2048)
+    
+    fid.update(real_B_images_tensor, real=True)
+    fid.update(fake_B_images_tensor, real=False)
+    print("FID Score: ", fid.compute())
+
+    # ssim_rec_real = []
+    # ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(model.device)
+    # for i in range(0, len(real_A_images)):
+    #     ssim_rec_real.append(ssim(real_A_images[i].cpu(), cycle_images[i].cpu()))
+
+    # ssim_rec_real_cpu = [x.cpu().numpy() for x in ssim_rec_real]
+
+    # # Plotting a basic histogram
+    # plt.hist(ssim_rec_real_cpu, bins=15, color='skyblue', edgecolor='black')
+    
+    # # Adding labels and title
+    # plt.xlabel('SSIM')
+    # plt.ylabel('Frequency')
+    # plt.title('SSIM for A vs. F(G(A)) Distribution')
+    
+    # # Display the plot
+    # plt.show()
