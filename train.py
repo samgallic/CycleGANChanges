@@ -24,22 +24,17 @@ from options.train_options import TrainOptions
 from data import create_dataset
 from models import create_model
 from util.visualizer import Visualizer
+import log_weights
 
 if __name__ == '__main__':
     opt = TrainOptions().parse()   # get training options
     dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
     dataset_size = len(dataset)    # get the number of images in the dataset.
     print('The number of training images = %d' % dataset_size)
+    weights_log = log_weights.WeightLogger('checkpoints/' + opt.name + '/' + 'weights_A.csv', 'checkpoints/' + opt.name + '/' + 'weights_B.csv')
 
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
-
-    # Check if we use DataParallel for multi-GPU setup
-    if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-        model = torch.nn.DataParallel(model)
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        model.to(device)
-        print(f"Using {torch.cuda.device_count()} GPUs for training.")
 
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
@@ -49,10 +44,7 @@ if __name__ == '__main__':
         iter_data_time = time.time()    # timer for data loading per iteration
         epoch_iter = 0                  # the number of training iterations in current epoch, reset to 0 every epoch
         visualizer.reset()              # reset the visualizer: make sure it saves the results to HTML at least once every epoch
-        if isinstance(model, torch.nn.DataParallel):
-            model.module.update_learning_rate()  # update learning rates in the beginning of every epoch.
-        else:
-            model.update_learning_rate()
+        model.update_learning_rate()
 
         for i, data in enumerate(dataset):  # inner loop within one epoch
             iter_start_time = time.time()  # timer for computation per iteration
@@ -60,46 +52,32 @@ if __name__ == '__main__':
 
             total_iters += opt.batch_size
             epoch_iter += opt.batch_size
-            if isinstance(model, torch.nn.DataParallel):
-                model.module.set_input(data)  # unpack data from dataset and apply preprocessing
-                model.module.optimize_parameters()  # calculate loss functions, get gradients, update network weights
-                print(model.module.fake_A.size(), '\n')
-            else:
-                model.set_input(data)
-                model.optimize_parameters()
+            model.set_input(data)
+            model.optimize_parameters()
 
             if total_iters % opt.display_freq == 0:  # display images on visdom and save images to a HTML file
                 save_result = total_iters % opt.update_html_freq == 0
-                if isinstance(model, torch.nn.DataParallel):
-                    model.module.compute_visuals()
-                else:
-                    model.compute_visuals()
+                model.compute_visuals()
                 visualizer.display_current_results(model.module.get_current_visuals() if isinstance(model, torch.nn.DataParallel) else model.get_current_visuals(), epoch, save_result)
 
             if total_iters % opt.print_freq == 0:  # print training losses and save logging information to the disk
                 losses = model.module.get_current_losses() if isinstance(model, torch.nn.DataParallel) else model.get_current_losses()
                 t_comp = (time.time() - iter_start_time) / opt.batch_size
                 visualizer.print_current_losses(epoch, epoch_iter, losses, t_comp, t_data)
+                weights_log.log_weights(epoch, model)
                 if opt.display_id > 0:
                     visualizer.plot_current_losses(epoch, float(epoch_iter) / dataset_size, losses)
 
             if total_iters % opt.save_latest_freq == 0:  # cache our latest model every <save_latest_freq> iterations
                 print('saving the latest model (epoch %d, total_iters %d)' % (epoch, total_iters))
                 save_suffix = 'iter_%d' % total_iters if opt.save_by_iter else 'latest'
-                if isinstance(model, torch.nn.DataParallel):
-                    model.module.save_networks(save_suffix)
-                else:
-                    model.save_networks(save_suffix)
+                model.save_networks(save_suffix)
 
             iter_data_time = time.time()  # update time for next data loading measurement
 
         if epoch % opt.save_epoch_freq == 0:  # cache our model every <save_epoch_freq> epochs
             print('saving the model at the end of epoch %d, iters %d' % (epoch, total_iters))
-            if isinstance(model, torch.nn.DataParallel):
-                model.module.save_networks('latest')
-                model.module.save_networks(epoch)
-            else:
-                model.save_networks('latest')
-                model.save_networks(epoch)
+            model.save_networks('latest')
+            model.save_networks(epoch)
 
         print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.n_epochs + opt.n_epochs_decay, time.time() - epoch_start_time))

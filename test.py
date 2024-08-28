@@ -88,14 +88,18 @@ except ImportError:
 
 if __name__ == '__main__':
 
-    # Paths to your image folders
-    folder_fake = 'monet2photo_fake_B'  # Update this path
-    folder_real = 'monet2photo_real_B'  # Update this path
+    # # Paths to your image folders
+    # folder_fake_A = 'tiny_noise_fake_A'
+    # folder_real_A = 'tiny_noise_real_A'  
+    # folder_fake_B = 'tiny_noise_fake_B'  
+    # folder_real_B = 'tiny_noise_real_B'  
 
-    # Compute the FID score
-    # score = fid.compute_fid(folder_fake, folder_real)
+    # # Compute the FID score
+    # score_A = fid.compute_fid(folder_fake_A, folder_real_A)
+    # score_B = fid.compute_fid(folder_fake_B, folder_real_B)
 
-    # print(score)
+    # print("noisy2normal", score_A)
+    # print("normal2noisy", score_B)
 
     fake_A_images = []
     fake_B_images = []
@@ -150,18 +154,26 @@ if __name__ == '__main__':
     real_B_images_tensor = ((torch.cat(real_B_images, dim=0) + 1) * 0.5 * 255).byte().cpu()
     fake_B_images_tensor = ((torch.cat(fake_B_images, dim=0) + 1) * 0.5 * 255).byte().cpu()
 
-    fid_scores = bootstrap_fid(real_B_images_tensor, fake_B_images_tensor)
-    print("Mean FID:", np.mean(fid_scores))
-    print("FID Std Dev:", np.std(fid_scores))
+    # fid_scores = bootstrap_fid(real_B_images_tensor, fake_B_images_tensor)
+    # print("Mean FID:", np.mean(fid_scores))
+    # print("FID Std Dev:", np.std(fid_scores))
 
     inception.update(fake_B_images_tensor)
-    print("Inception Score: ", inception.compute())
+    print("Inception Score for Normal2Noise: ", inception.compute())
+    inception.reset()
+    inception.update(fake_A_images_tensor)
+    print("Inception Score for Noise2Normal: ", inception.compute())
 
-    fid = FrechetInceptionDistance(feature=2048)
+    # fid = FrechetInceptionDistance(feature=2048)
     
-    fid.update(real_B_images_tensor, real=True)
-    fid.update(fake_B_images_tensor, real=False)
-    print("FID Score: ", fid.compute())
+    # fid.update(real_B_images_tensor, real=True)
+    # fid.update(fake_B_images_tensor, real=False)
+    # print("FID Score for Normal2Noise: ", fid.compute())
+
+    # fid.reset()
+    # fid.update(real_A_images_tensor, real=True)
+    # fid.update(fake_A_images_tensor, real=False)
+    # print("FID Score for Noise2Normal: ", fid.compute())
 
     # ssim_rec_real = []
     # ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(model.device)

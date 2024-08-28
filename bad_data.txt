@@ -1,0 +1,4 @@
+i_score_A: tensor(1.)
+fid_score_A: tensor(702.9939)
+i_score_B: tensor(1.)
+fid_score_B: tensor(66.0642)
