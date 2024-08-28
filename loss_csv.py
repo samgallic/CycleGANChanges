@@ -2,8 +2,9 @@ import csv
 import re
 
 # Define the input and output file paths
-input_file_path = 'checkpoints/gray_ray/loss_log.txt'
-output_file_path = 'ray.csv'
+name = ''
+input_file_path = 'checkpoints/' + name + '/loss_log.txt'
+output_file_path = 'checkpoints/' + name + '/loss_log.csv'
 
 # Define the regex pattern to extract the data
 pattern = re.compile(r"\(epoch: (\d+), iters: (\d+), time: ([\d.]+), data: ([\d.]+)\)\s*"
