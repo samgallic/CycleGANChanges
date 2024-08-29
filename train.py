@@ -25,8 +25,11 @@ from data import create_dataset
 from models import create_model
 from util.visualizer import Visualizer
 import log_weights
+import loss_csv
+import os
 
 if __name__ == '__main__':
+    start_time = time.time()
     opt = TrainOptions().parse()   # get training options
     dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
     dataset_size = len(dataset)    # get the number of images in the dataset.
@@ -81,3 +84,14 @@ if __name__ == '__main__':
             model.save_networks(epoch)
 
         print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.n_epochs + opt.n_epochs_decay, time.time() - epoch_start_time))
+
+    end_time = time.time()
+
+    # Open the file in write mode ('w' will overwrite the file if it already exists)
+    with open('checkpoints/' + opt.name + '/time.txt', 'w') as file:
+        # Write the number to the file as a string
+        file.write(str(end_time - start_time) + ' seconds')
+
+    print("Number written to file successfully.")
+
+    loss_csv.loss_csv(opt.name)
