@@ -47,6 +47,7 @@ core.pt_main_thread-7-1720069973-7935-3746-c1110a-s23.ufhpc.527314
 core.python-6-1724066597-7935-3746-c1001a-s17.ufhpc.2328525
 core.python-11-1718985327-7935-3746-c1106a-s35.ufhpc.347415
 core.python-11-1718985327-7935-3746-c1106a-s35.ufhpc.347900
+.env
 
 #Ignore Wandb
 wandb/

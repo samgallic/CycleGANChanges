@@ -45,7 +45,7 @@ if __name__ == '__main__':
     total_iters = 0                # the total number of training iterations
 
     experiment = Experiment(
-        api_key="G6y0a9YzH2OXjK7O5Ekne3eqR",
+        api_key=os.getenv("COMET_KEY"),
         project_name=opt.name,
         workspace="samgallic"
     )
