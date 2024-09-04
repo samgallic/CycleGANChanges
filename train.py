@@ -19,6 +19,8 @@ See training and test tips at: https://github.com/junyanz/pytorch-CycleGAN-and-p
 See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix/blob/master/docs/qa.md
 """
 import time
+from comet_ml import Experiment
+from comet_ml.integration.pytorch import log_model
 import torch
 from options.train_options import TrainOptions
 from data import create_dataset
@@ -34,13 +36,26 @@ if __name__ == '__main__':
     dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
     dataset_size = len(dataset)    # get the number of images in the dataset.
     print('The number of training images = %d' % dataset_size)
-    weights_log = log_weights.WeightLogger('checkpoints/' + opt.name + '/' + 'weights_A.csv', 'checkpoints/' + opt.name + '/' + 'weights_B.csv')
+    weights_log = log_weights.WeightLogger()
 
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
 
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
+
+    experiment = Experiment(
+        api_key="G6y0a9YzH2OXjK7O5Ekne3eqR",
+        project_name=opt.name,
+        workspace="samgallic"
+    )
+
+    hyper_params = {
+        "learning_rate": opt.lr,
+        "batch_size": opt.batch_size,
+        "n_epochs": opt.n_epochs + opt.n_epochs_decay,
+    }
+    experiment.log_parameters(hyper_params)
 
     for epoch in range(opt.epoch_count, opt.n_epochs + opt.n_epochs_decay + 1):
         epoch_start_time = time.time()  # timer for entire epoch
@@ -64,10 +79,9 @@ if __name__ == '__main__':
                 visualizer.display_current_results(model.module.get_current_visuals() if isinstance(model, torch.nn.DataParallel) else model.get_current_visuals(), epoch, save_result)
 
             if total_iters % opt.print_freq == 0:  # print training losses and save logging information to the disk
-                losses = model.module.get_current_losses() if isinstance(model, torch.nn.DataParallel) else model.get_current_losses()
+                losses = model.get_current_losses()
                 t_comp = (time.time() - iter_start_time) / opt.batch_size
                 visualizer.print_current_losses(epoch, epoch_iter, losses, t_comp, t_data)
-                weights_log.log_weights(epoch, model)
                 if opt.display_id > 0:
                     visualizer.plot_current_losses(epoch, float(epoch_iter) / dataset_size, losses)
 
@@ -83,6 +97,11 @@ if __name__ == '__main__':
             model.save_networks('latest')
             model.save_networks(epoch)
 
+        weights_A, weights_B = weights_log.log_weights(model)
+        losses = model.get_current_losses()
+        experiment.log_metrics(losses, epoch=epoch)
+        experiment.log_metrics(weights_A, epoch=epoch)
+        experiment.log_metrics(weights_B, epoch=epoch)
         print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.n_epochs + opt.n_epochs_decay, time.time() - epoch_start_time))
 
     end_time = time.time()

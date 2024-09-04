@@ -102,8 +102,8 @@ def main():
     name = 'n2n_16_timed'
     output = 'noisy'
 
-    real_A = load_images_from_folder('results/organized/'+ name + '/real_A')
-    fake_B = load_images_from_folder('results/organized/'+ name + '/fake_B')
+    real_A = load_images_from_folder('results/organized/'+ name + '/fake_A')
+    fake_B = load_images_from_folder('results/organized/'+ name + '/real_B')
     noises_emp = []
 
     real_noise = add_multiplicative_rayleigh_noise(real_A, 0.5)
