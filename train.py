@@ -19,16 +19,12 @@ See training and test tips at: https://github.com/junyanz/pytorch-CycleGAN-and-p
 See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix/blob/master/docs/qa.md
 """
 import time
-from comet_ml import Experiment
-from comet_ml.integration.pytorch import log_model
-import torch
 from options.train_options import TrainOptions
 from data import create_dataset
 from models import create_model
 from util.visualizer import Visualizer
 import log_weights
 import loss_csv
-import os
 
 if __name__ == '__main__':
     start_time = time.time()
@@ -43,19 +39,6 @@ if __name__ == '__main__':
 
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
-
-    experiment = Experiment(
-        api_key=os.getenv("COMET_KEY"),
-        project_name=opt.name,
-        workspace="samgallic"
-    )
-
-    hyper_params = {
-        "learning_rate": opt.lr,
-        "batch_size": opt.batch_size,
-        "n_epochs": opt.n_epochs + opt.n_epochs_decay,
-    }
-    experiment.log_parameters(hyper_params)
 
     for epoch in range(opt.epoch_count, opt.n_epochs + opt.n_epochs_decay + 1):
         epoch_start_time = time.time()  # timer for entire epoch
@@ -73,18 +56,6 @@ if __name__ == '__main__':
             model.set_input(data)
             model.optimize_parameters()
 
-            if total_iters % opt.display_freq == 0:  # display images on visdom and save images to a HTML file
-                save_result = total_iters % opt.update_html_freq == 0
-                model.compute_visuals()
-                visualizer.display_current_results(model.module.get_current_visuals() if isinstance(model, torch.nn.DataParallel) else model.get_current_visuals(), epoch, save_result)
-
-            if total_iters % opt.print_freq == 0:  # print training losses and save logging information to the disk
-                losses = model.get_current_losses()
-                t_comp = (time.time() - iter_start_time) / opt.batch_size
-                visualizer.print_current_losses(epoch, epoch_iter, losses, t_comp, t_data)
-                if opt.display_id > 0:
-                    visualizer.plot_current_losses(epoch, float(epoch_iter) / dataset_size, losses)
-
             if total_iters % opt.save_latest_freq == 0:  # cache our latest model every <save_latest_freq> iterations
                 print('saving the latest model (epoch %d, total_iters %d)' % (epoch, total_iters))
                 save_suffix = 'iter_%d' % total_iters if opt.save_by_iter else 'latest'
@@ -99,9 +70,13 @@ if __name__ == '__main__':
 
         weights_A, weights_B = weights_log.log_weights(model)
         losses = model.get_current_losses()
-        experiment.log_metrics(losses, epoch=epoch)
-        experiment.log_metrics(weights_A, epoch=epoch)
-        experiment.log_metrics(weights_B, epoch=epoch)
+        save_result = total_iters % opt.update_html_freq == 0
+        model.compute_visuals()
+        visualizer.display_current_results(model.get_current_visuals(), epoch, save_result)
+        t_comp = (time.time() - iter_start_time) / opt.batch_size
+        visualizer.print_current_losses(epoch, epoch_iter, losses, t_comp, t_data)
+        if opt.display_id > 0:
+            visualizer.plot_current_losses(epoch, float(epoch_iter) / dataset_size, losses, weights_A, weights_B)
         print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.n_epochs + opt.n_epochs_decay, time.time() - epoch_start_time))
 
     end_time = time.time()
