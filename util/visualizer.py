@@ -210,7 +210,7 @@ class Visualizer():
                 webpage.add_images(ims, txts, links, width=self.win_size)
             webpage.save()
 
-    def plot_current_losses(self, epoch, counter_ratio, losses, weights_A, weights_B):
+    def plot_current_losses(self, epoch, counter_ratio, losses, weights_A, weights_B, dists):
         """display the current losses and weights on visdom display: dictionary of error labels and values
 
         Parameters:
@@ -234,10 +234,11 @@ class Visualizer():
         epoch_dict["Epoch"] = epoch
 
         if not hasattr(self, 'plot_data'):
-            self.plot_data = {'X': [], 'Y': [], 'legend': list(grouped.keys()) + list(weights_A.keys()) + list(weights_B.keys()) + list(epoch_dict.keys())}
+            self.plot_data = {'X': [], 'Y': [], 'legend': list(grouped.keys()) + list(weights_A.keys()) + 
+                              list(weights_B.keys()) + list(dists) + list(epoch_dict.keys())}
         
         # Combine losses and weights into one dictionary for logging
-        combined_metrics = {**grouped, **weights_A, **weights_B, **epoch_dict}
+        combined_metrics = {**grouped, **weights_A, **weights_B, **dists, **epoch_dict}
         
         # Append the current epoch to X
         self.plot_data['X'].append(epoch)
@@ -260,7 +261,7 @@ class Visualizer():
 
         # Log losses and weights to W&B (if applicable)
         if self.use_wandb:
-            combined_metrics_to_log = {**grouped, **weights_A, **weights_B, **epoch_dict}
+            combined_metrics_to_log = {**grouped, **weights_A, **weights_B, **dists, **epoch_dict}
             self.wandb_run.log(combined_metrics_to_log)
 
     # losses: same format as |losses| of plot_current_losses

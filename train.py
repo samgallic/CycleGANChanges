@@ -25,6 +25,8 @@ from models import create_model
 from util.visualizer import Visualizer
 import log_weights
 import loss_csv
+import earth_movers
+import copy
 
 if __name__ == '__main__':
     start_time = time.time()
@@ -36,6 +38,7 @@ if __name__ == '__main__':
 
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
+    ems = earth_movers.DistanceCalc(opt)
 
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
@@ -69,6 +72,8 @@ if __name__ == '__main__':
             model.save_networks(epoch)
 
         weights_A, weights_B = weights_log.log_weights(model)
+        dist = ems.earth_movers(model)
+        print(dist)
         losses = model.get_current_losses()
         save_result = total_iters % opt.update_html_freq == 0
         model.compute_visuals()
@@ -76,7 +81,7 @@ if __name__ == '__main__':
         t_comp = (time.time() - iter_start_time) / opt.batch_size
         visualizer.print_current_losses(epoch, epoch_iter, losses, t_comp, t_data)
         if opt.display_id > 0:
-            visualizer.plot_current_losses(epoch, float(epoch_iter) / dataset_size, losses, weights_A, weights_B)
+            visualizer.plot_current_losses(epoch, float(epoch_iter) / dataset_size, losses, weights_A, weights_B, dist)
         print('End of epoch %d / %d \t Time Taken: %d sec' % (epoch, opt.n_epochs + opt.n_epochs_decay, time.time() - epoch_start_time))
 
     end_time = time.time()

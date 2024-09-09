@@ -88,12 +88,7 @@ def load_images_from_folder(folder_path):
         if filename.endswith((".jpg", ".jpeg", ".png")):
             img_path = os.path.join(folder_path, filename)
             img = io.read_image(img_path)
-            
-            # Ensure images are loaded as grayscale
-            if img.shape[0] == 3:  # If the image is RGB, convert it to grayscale
-                img = transforms.Grayscale()(img)
 
-            filename = filename[0:7]
             image_dict[filename] = img
             
     return image_dict
