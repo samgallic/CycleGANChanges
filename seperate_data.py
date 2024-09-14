@@ -51,3 +51,8 @@ def seperate(name):
                 # Copy the fake_A image to the fake_A directory
                 shutil.copy(os.path.join(source_directory, filename), 
                             os.path.join(rec_A_directory, filename))
+def main():
+    seperate('normal2noisy_emb')
+
+if __name__ == '__main__':
+    main()

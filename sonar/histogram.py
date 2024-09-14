@@ -39,7 +39,7 @@ def add_multiplicative_rayleigh_noise(images, scale):
 
     return noisy_images
 
-def plot_pdf_with_rayleigh(data, data_emp, title):
+def plot_pdf_with_rayleigh(data, data_emp, title, save_path):
     if isinstance(data, np.ndarray):
         flat_data = data.flatten()
         x = np.linspace(0, np.max(flat_data), 1000)
@@ -70,17 +70,15 @@ def plot_pdf_with_rayleigh(data, data_emp, title):
     # Plot the main data
     plt.hist(flat_data, bins=200, color='blue', alpha=0.7, density=True, label='Noise Data')
 
-    rayleigh_pdf = rayleigh.pdf(x, scale=(0.5))
-    
-    plt.plot(x, rayleigh_pdf, 'r-', lw=2, label='Rayleigh Distribution PDF (scale=0.5)')
-
     plt.title(title)
     plt.xlabel('Pixel Values')
     plt.ylabel('Density')
     plt.legend()
     plt.grid(True)
     plt.xlim([flat_data.min().item(), flat_data.max().item()])
-    plt.show()
+    
+    # Save the plot as a PNG file
+    plt.savefig(save_path, format='png', bbox_inches='tight')
 
 def load_images_from_folder(folder_path):
     image_dict = {}

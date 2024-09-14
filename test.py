@@ -29,57 +29,13 @@ See frequently asked questions at: https://github.com/junyanz/pytorch-CycleGAN-a
 
 import os
 import torch
-import numpy as np
 from options.test_options import TestOptions
 from data import create_dataset
 from models import create_model
 from util.visualizer import save_images
 from util import html
-from torchmetrics.image import StructuralSimilarityIndexMeasure
-import matplotlib.pyplot as plt
-from torch import nn
-from torch.nn import functional as F
 import torch.utils.data
-from torchmetrics.image.fid import FrechetInceptionDistance
 from torchmetrics.image.inception import InceptionScore
-from scipy.stats import entropy
-from torchvision.models import inception_v3
-from cleanfid import fid
-from torchvision.transforms import functional as TF
-import csv
-
-def bootstrap_fid(real_images, fake_images, n_bootstrap=100):
-    # Check if GPU is available and set the device accordingly
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Running on device: {device}")
-
-    # Move the images to the specified device (GPU if available)
-    real_images = real_images.to(device)
-    fake_images = fake_images.to(device)
-
-    n_samples = real_images.shape[0]
-    fid_scores = []
-
-    for i in range(n_bootstrap):
-        # Sample indices with replacement
-        sampled_indices = np.random.choice(n_samples, n_samples, replace=True)
-        print(f"{i+1} / {n_bootstrap}")
-
-        # Resample the images
-        real_resampled = real_images[sampled_indices].to(device)
-        fake_resampled = fake_images[sampled_indices].to(device)
-        
-        # Initialize FID object (does not need the device parameter)
-        fid = FrechetInceptionDistance(feature=2048)
-        fid = fid.to(device)  # Move the FID object to the correct device manually
-        fid.update(real_resampled, real=True)
-        fid.update(fake_resampled, real=False)
-        
-        # Compute FID for the resampled set
-        fid_score = fid.compute()
-        fid_scores.append(fid_score.item())  # Convert tensor to Python scalar
-
-    return fid_scores
 
 try:
     import wandb
@@ -87,20 +43,6 @@ except ImportError:
     print('Warning: wandb package cannot be found. The option "--use_wandb" will result in error.')
 
 if __name__ == '__main__':
-
-    # # Paths to your image folders
-    # folder_fake_A = 'tiny_noise_fake_A'
-    # folder_real_A = 'tiny_noise_real_A'  
-    # folder_fake_B = 'tiny_noise_fake_B'  
-    # folder_real_B = 'tiny_noise_real_B'  
-
-    # # Compute the FID score
-    # score_A = fid.compute_fid(folder_fake_A, folder_real_A)
-    # score_B = fid.compute_fid(folder_fake_B, folder_real_B)
-
-    # print("noisy2normal", score_A)
-    # print("normal2noisy", score_B)
-
     fake_A_images = []
     fake_B_images = []
     real_A_images = []
@@ -154,41 +96,8 @@ if __name__ == '__main__':
     real_B_images_tensor = ((torch.cat(real_B_images, dim=0) + 1) * 0.5 * 255).byte().cpu()
     fake_B_images_tensor = ((torch.cat(fake_B_images, dim=0) + 1) * 0.5 * 255).byte().cpu()
 
-    # fid_scores = bootstrap_fid(real_B_images_tensor, fake_B_images_tensor)
-    # print("Mean FID:", np.mean(fid_scores))
-    # print("FID Std Dev:", np.std(fid_scores))
-
     inception.update(fake_B_images_tensor)
     print("Inception Score for Normal2Noise: ", inception.compute())
     inception.reset()
     inception.update(fake_A_images_tensor)
     print("Inception Score for Noise2Normal: ", inception.compute())
-
-    # fid = FrechetInceptionDistance(feature=2048)
-    
-    # fid.update(real_B_images_tensor, real=True)
-    # fid.update(fake_B_images_tensor, real=False)
-    # print("FID Score for Normal2Noise: ", fid.compute())
-
-    # fid.reset()
-    # fid.update(real_A_images_tensor, real=True)
-    # fid.update(fake_A_images_tensor, real=False)
-    # print("FID Score for Noise2Normal: ", fid.compute())
-
-    # ssim_rec_real = []
-    # ssim = StructuralSimilarityIndexMeasure(data_range=1.0).to(model.device)
-    # for i in range(0, len(real_A_images)):
-    #     ssim_rec_real.append(ssim(real_A_images[i].cpu(), cycle_images[i].cpu()))
-
-    # ssim_rec_real_cpu = [x.cpu().numpy() for x in ssim_rec_real]
-
-    # # Plotting a basic histogram
-    # plt.hist(ssim_rec_real_cpu, bins=15, color='skyblue', edgecolor='black')
-    
-    # # Adding labels and title
-    # plt.xlabel('SSIM')
-    # plt.ylabel('Frequency')
-    # plt.title('SSIM for A vs. F(G(A)) Distribution')
-    
-    # # Display the plot
-    # plt.show()

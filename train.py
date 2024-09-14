@@ -23,10 +23,9 @@ from options.train_options import TrainOptions
 from data import create_dataset
 from models import create_model
 from util.visualizer import Visualizer
-import log_weights
-import loss_csv
-import earth_movers
-import copy
+import sonar.log_weights as log_weights
+import sonar.loss_csv as loss_csv
+import sonar.earth_movers as earth_movers
 
 if __name__ == '__main__':
     start_time = time.time()
@@ -38,7 +37,8 @@ if __name__ == '__main__':
 
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
-    ems = earth_movers.DistanceCalc(opt)
+    if opt.emd:
+        dist_calc = earth_movers.DistanceCalc(opt, model)
 
     visualizer = Visualizer(opt)   # create a visualizer that display/save images and plots
     total_iters = 0                # the total number of training iterations
@@ -72,8 +72,9 @@ if __name__ == '__main__':
             model.save_networks(epoch)
 
         weights_A, weights_B = weights_log.log_weights(model)
-        dist = ems.earth_movers(model)
-        print(dist)
+        dist = {}
+        if opt.emd:
+            dist = dist_calc.earth_movers(epoch, model)
         losses = model.get_current_losses()
         save_result = total_iters % opt.update_html_freq == 0
         model.compute_visuals()
