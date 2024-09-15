@@ -117,8 +117,8 @@ class DistanceCalc:
         if epoch % 50 == 0:
             path = f'/blue/azare/samgallic/Research/new_cycle_gan/checkpoints/{self.opt.name}/histograms'
             os.makedirs(path, exist_ok=True)
-            histogram.plot_pdf_with_rayleigh(noisy_a.cpu(), self.emp.cpu(), f'Epoch {epoch} A', f'{epoch}_A.png')
-            histogram.plot_pdf_with_rayleigh(noisy_b.cpu(), self.emp.cpu(), f'Epoch {epoch} B', f'{epoch}_B.png')
+            histogram.plot_pdf_with_rayleigh(noisy_a.cpu(), self.emp.cpu(), f'Epoch {epoch} A', f'{path}/{epoch}_A.png')
+            histogram.plot_pdf_with_rayleigh(noisy_b.cpu(), self.emp.cpu(), f'Epoch {epoch} B', f'{path}/{epoch}_B.png')
 
         return {'emd_A': emd_A_avg, 'emd_B': emd_B_avg}
 
