@@ -6,6 +6,7 @@ from scipy.stats import wasserstein_distance
 from data.unaligned_dataset import UnalignedDataset
 from torchvision import transforms
 import sonar.histogram as histogram
+from scipy.stats import ks_2samp
 from PIL import Image
 import os
 
@@ -48,9 +49,18 @@ class DistanceCalc:
         transform_A = self.dataset.transform_A
         transform_B = self.dataset.transform_B
 
-        real_A_pil = load_images_from_folder(opt.dataroot + '/trainA')
-        real_B_pil = load_images_from_folder(opt.dataroot + '/trainB')
-        unnoise_B_pil = load_images_from_folder(new_opt.dataroot + '/trainB')
+        real_A_pil = {}
+        real_B_pil = {}
+        unnoise_B_pil = {}
+
+        if self.opt.isTrain:
+            real_A_pil = load_images_from_folder(opt.dataroot + '/trainA')
+            real_B_pil = load_images_from_folder(opt.dataroot + '/trainB')
+            unnoise_B_pil = load_images_from_folder(new_opt.dataroot + '/trainB')
+        else:
+            real_A_pil = load_images_from_folder(opt.dataroot + '/testA')
+            real_B_pil = load_images_from_folder(opt.dataroot + '/testB')
+            unnoise_B_pil = load_images_from_folder(new_opt.dataroot + '/testB')
 
         self.real_A = {}
         self.real_B = {}
@@ -114,13 +124,22 @@ class DistanceCalc:
         emd_A_avg = emd_A_total / len(emp_batches)
         emd_B_avg = emd_B_total / len(emp_batches)
 
-        if epoch % 50 == 0:
-            path = f'/blue/azare/samgallic/Research/new_cycle_gan/checkpoints/{self.opt.name}/histograms'
-            os.makedirs(path, exist_ok=True)
-            histogram.plot_pdf_with_rayleigh(noisy_a.cpu(), self.emp.cpu(), f'Epoch {epoch} A', f'{path}/{epoch}_A.png')
-            histogram.plot_pdf_with_rayleigh(noisy_b.cpu(), self.emp.cpu(), f'Epoch {epoch} B', f'{path}/{epoch}_B.png')
+        ks_stat_A = ks_2samp(self.emp.flatten().numpy(), noisy_a.flatten().numpy()).statistic
+        ks_stat_B = ks_2samp(self.emp.flatten().numpy(), noisy_b.flatten().numpy()).statistic
+        print(ks_stat_A)
+        print(ks_stat_B)
 
-        return {'emd_A': emd_A_avg, 'emd_B': emd_B_avg}
+        if epoch % 50 == 0 or epoch == 1:
+            path = ''
+            if self.opt.isTrain:
+                path = f'/blue/azare/samgallic/Research/new_cycle_gan/checkpoints/{self.opt.name}/histograms'
+            else:
+                path = f'/blue/azare/samgallic/Research/new_cycle_gan/results/{self.opt.name}/histograms'
+            os.makedirs(path, exist_ok=True)
+            histogram.plot_pdf_with_rayleigh(noisy_a.cpu(), self.emp.cpu(), f'Epoch {epoch} Normal2Noisy', f'{path}/{epoch}_A.png')
+            histogram.plot_pdf_with_rayleigh(noisy_b.cpu(), self.emp.cpu(), f'Epoch {epoch} Noisy2Normal', f'{path}/{epoch}_B.png')
+
+        return {'emd_A': emd_A_avg, 'emd_B': emd_B_avg, 'ks_A': ks_stat_A, 'ks_B': ks_stat_B}
 
 
     def _calculate_noises_batch(self, A_batch, B_batch):
@@ -128,9 +147,6 @@ class DistanceCalc:
         for filename, a in A_batch.items():
             b = B_batch[filename]
             a, b = self._shape_check(a, b)
-            if self.opt.log_images:
-                a = torch.log(a)
-                b = torch.log(b)
             noise = b - a
             noises.append(noise)
         return torch.cat(noises)

@@ -52,7 +52,7 @@ def seperate(name):
                 shutil.copy(os.path.join(source_directory, filename), 
                             os.path.join(rec_A_directory, filename))
 def main():
-    seperate('normal2noisy_emb')
+    seperate('forest_subtraction_1_ks')
 
 if __name__ == '__main__':
     main()

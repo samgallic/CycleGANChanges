@@ -36,6 +36,7 @@ from util.visualizer import save_images
 from util import html
 import torch.utils.data
 from torchmetrics.image.inception import InceptionScore
+import sonar.earth_movers
 
 try:
     import wandb
@@ -43,12 +44,12 @@ except ImportError:
     print('Warning: wandb package cannot be found. The option "--use_wandb" will result in error.')
 
 if __name__ == '__main__':
-    fake_A_images = []
-    fake_B_images = []
-    real_A_images = []
-    real_B_images = []
-    cycle_images = []
-    inception = InceptionScore()
+    # fake_A_images = []
+    # fake_B_images = []
+    # real_A_images = []
+    # real_B_images = []
+    # cycle_images = []
+    # inception = InceptionScore()
 
     opt = TestOptions().parse()  # get test options
     # hard-code some parameters for test
@@ -60,6 +61,8 @@ if __name__ == '__main__':
     dataset = create_dataset(opt)  # create a dataset given opt.dataset_mode and other options
     model = create_model(opt)      # create a model given opt.model and other options
     model.setup(opt)               # regular setup: load and print networks; create schedulers
+
+    dist_calc = sonar.earth_movers.DistanceCalc(opt, model)
 
     # initialize logger
     if opt.use_wandb:
@@ -79,11 +82,11 @@ if __name__ == '__main__':
             break
         model.set_input(data)  # unpack data from data loader
         model.test()           # run inference
-        fake_A_images.append(model.fake_A)
-        fake_B_images.append(model.fake_B)
-        real_A_images.append(model.real_A)
-        real_B_images.append(model.real_B)
-        cycle_images.append(model.rec_A)
+        # fake_A_images.append(model.fake_A)
+        # fake_B_images.append(model.fake_B)
+        # real_A_images.append(model.real_A)
+        # real_B_images.append(model.real_B)
+        # cycle_images.append(model.rec_A)
         visuals = model.get_current_visuals()  # get image results
         img_path = model.get_image_paths()     # get image paths
         if i % 5 == 0:  # save images to an HTML file
@@ -91,13 +94,15 @@ if __name__ == '__main__':
         save_images(webpage, visuals, img_path, aspect_ratio=opt.aspect_ratio, width=opt.display_winsize, use_wandb=opt.use_wandb)
     webpage.save()  # save the HTML
 
-    real_A_images_tensor = ((torch.cat(real_A_images, dim=0) + 1) * 0.5 * 255).byte().cpu()
-    fake_A_images_tensor = ((torch.cat(fake_A_images, dim=0) + 1) * 0.5 * 255).byte().cpu()
-    real_B_images_tensor = ((torch.cat(real_B_images, dim=0) + 1) * 0.5 * 255).byte().cpu()
-    fake_B_images_tensor = ((torch.cat(fake_B_images, dim=0) + 1) * 0.5 * 255).byte().cpu()
+    # real_A_images_tensor = ((torch.cat(real_A_images, dim=0) + 1) * 0.5 * 255).byte().cpu()
+    # fake_A_images_tensor = ((torch.cat(fake_A_images, dim=0) + 1) * 0.5 * 255).byte().cpu()
+    # real_B_images_tensor = ((torch.cat(real_B_images, dim=0) + 1) * 0.5 * 255).byte().cpu()
+    # fake_B_images_tensor = ((torch.cat(fake_B_images, dim=0) + 1) * 0.5 * 255).byte().cpu()
 
-    inception.update(fake_B_images_tensor)
-    print("Inception Score for Normal2Noise: ", inception.compute())
-    inception.reset()
-    inception.update(fake_A_images_tensor)
-    print("Inception Score for Noise2Normal: ", inception.compute())
+    # inception.update(fake_B_images_tensor)
+    # print("Inception Score for Normal2Noise: ", inception.compute())
+    # inception.reset()
+    # inception.update(fake_A_images_tensor)
+    # print("Inception Score for Noise2Normal: ", inception.compute())
+
+    print(dist_calc.earth_movers(1, model))
