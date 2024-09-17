@@ -51,8 +51,4 @@ def seperate(name):
                 # Copy the fake_A image to the fake_A directory
                 shutil.copy(os.path.join(source_directory, filename), 
                             os.path.join(rec_A_directory, filename))
-def main():
-    seperate('forest_subtraction_1_ks')
-
-if __name__ == '__main__':
-    main()
+                

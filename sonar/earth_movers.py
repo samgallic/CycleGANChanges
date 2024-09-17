@@ -136,8 +136,8 @@ class DistanceCalc:
             else:
                 path = f'/blue/azare/samgallic/Research/new_cycle_gan/results/{self.opt.name}/histograms'
             os.makedirs(path, exist_ok=True)
-            histogram.plot_pdf_with_rayleigh(noisy_a.cpu(), self.emp.cpu(), f'Epoch {epoch} Normal2Noisy', f'{path}/{epoch}_A.png')
-            histogram.plot_pdf_with_rayleigh(noisy_b.cpu(), self.emp.cpu(), f'Epoch {epoch} Noisy2Normal', f'{path}/{epoch}_B.png')
+            histogram.plot_pdf_with_rayleigh(noisy_a.cpu(), self.emp.cpu(), f'Test Normal2Noisy', f'{path}/test_A.png')
+            histogram.plot_pdf_with_rayleigh(noisy_b.cpu(), self.emp.cpu(), f'Test Noisy2Normal', f'{path}/test_B.png')
 
         return {'emd_A': emd_A_avg, 'emd_B': emd_B_avg, 'ks_A': ks_stat_A, 'ks_B': ks_stat_B}
 

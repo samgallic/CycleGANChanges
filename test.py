@@ -37,6 +37,7 @@ from util import html
 import torch.utils.data
 from torchmetrics.image.inception import InceptionScore
 import sonar.earth_movers
+import seperate_data as S
 
 try:
     import wandb
@@ -104,5 +105,7 @@ if __name__ == '__main__':
     # inception.reset()
     # inception.update(fake_A_images_tensor)
     # print("Inception Score for Noise2Normal: ", inception.compute())
+
+    S.seperate(opt.name)
 
     print(dist_calc.earth_movers(1, model))
