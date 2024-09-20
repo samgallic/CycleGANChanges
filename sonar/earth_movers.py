@@ -51,29 +51,42 @@ class DistanceCalc:
 
         real_A_pil = {}
         real_B_pil = {}
+        unnoise_A_pil = {}
         unnoise_B_pil = {}
 
         if self.opt.isTrain:
             real_A_pil = load_images_from_folder(opt.dataroot + '/trainA')
             real_B_pil = load_images_from_folder(opt.dataroot + '/trainB')
+            unnoise_A_pil = load_images_from_folder(new_opt.dataroot + '/trainA')
             unnoise_B_pil = load_images_from_folder(new_opt.dataroot + '/trainB')
         else:
             real_A_pil = load_images_from_folder(opt.dataroot + '/testA')
             real_B_pil = load_images_from_folder(opt.dataroot + '/testB')
+            unnoise_A_pil = load_images_from_folder(new_opt.dataroot + '/testA')
             unnoise_B_pil = load_images_from_folder(new_opt.dataroot + '/testB')
 
         self.real_A = {}
         self.real_B = {}
-        noises = []
+        self.unnoise_A = {}
+        self.unnoise_B = {}
+        noises_A = []
+        noises_B = []
         for filename, img in real_A_pil.items():
-            self.real_A[filename] = transform_A(img).to(model.device)
+            normal = transform_A(unnoise_A_pil[filename])
+            gamma = transform_A(img)
+            self.real_A[filename] = gamma.to(model.device)
+            self.unnoise_A[filename] = normal.to(model.device)
+            noise = gamma - normal
+            noises_A.append(noise)
         for filename, img in real_B_pil.items():
-            a = transform_B(unnoise_B_pil[filename])
-            b = transform_B(img)
-            self.real_B[filename] = b.to(model.device)
-            noise = b - a
-            noises.append(noise)
-        self.emp = torch.cat(noises)
+            normal = transform_B(unnoise_B_pil[filename])
+            rayleigh = transform_B(img)
+            self.real_B[filename] = rayleigh.to(model.device)
+            self.unnoise_B[filename] = normal.to(model.device)
+            noise = rayleigh - normal
+            noises_B.append(noise)
+        self.emp_gamma = torch.cat(noises_A)
+        self.emp_rayleigh = torch.cat(noises_B)
 
     def _shape_check(self, a, b):
         if a.shape[0] != 1 or b.shape[0] != 1:
@@ -99,45 +112,48 @@ class DistanceCalc:
         model.netG_B.train()
 
         # Calculate noises in batches for the fake images
-        noisy_a = self._calculate_noises_batch(self.real_A, fake_B)
-        noisy_b = self._calculate_noises_batch(fake_A, self.real_B)
-        self.emp = self.emp.cpu()
-        noisy_a = noisy_a.cpu()
-        noisy_b = noisy_b.cpu()
+        noisy_gamma = self._calculate_noises_batch(self.unnoise_A, fake_B)
+        noisy_rayleigh = self._calculate_noises_batch(fake_A, self.unnoise_B)
+        self.emp_rayleigh = self.emp_rayleigh.cpu()
+        self.emp_gamma = self.emp_gamma.cpu()
+        noisy_gamma = noisy_gamma.cpu()
+        noisy_rayleigh = noisy_rayleigh.cpu()
 
         # Split tensors into batches
-        emp_batches = batch_tensor(self.emp, batch_size)
-        noisy_a_batches = batch_tensor(noisy_a, batch_size)
-        noisy_b_batches = batch_tensor(noisy_b, batch_size)
+        emp_gamma_batches = batch_tensor(self.emp_gamma, batch_size)
+        emp_rayleigh_batches = batch_tensor(self.emp_rayleigh, batch_size)
+        noisy_gamma_batches = batch_tensor(noisy_gamma, batch_size)
+        noisy_rayleigh_batches = batch_tensor(noisy_rayleigh, batch_size)
 
         # Initialize variables to store EMD for each batch
         emd_A_total = 0
         emd_B_total = 0
 
         # Compute EMD for each batch and accumulate results
-        for emp_batch, noisy_a_batch in zip(emp_batches, noisy_a_batches):
-            emd_A_total += wasserstein_distance(emp_batch.flatten(), noisy_a_batch.flatten())
+        for emp_gamma_batch, noisy_gamma_batch in zip(emp_gamma_batches, noisy_gamma_batches):
+            emd_A_total += wasserstein_distance(emp_gamma_batch.flatten(), noisy_gamma_batch.flatten())
             
-        for emp_batch, noisy_b_batch in zip(emp_batches, noisy_b_batches):
-            emd_B_total += wasserstein_distance(emp_batch.flatten(), noisy_b_batch.flatten())
+        for emp_batch, noisy_rayleigh_batch in zip(emp_rayleigh_batches, noisy_rayleigh_batches):
+            emd_B_total += wasserstein_distance(emp_batch.flatten(), noisy_rayleigh_batch.flatten())
 
-        emd_A_avg = emd_A_total / len(emp_batches)
-        emd_B_avg = emd_B_total / len(emp_batches)
+        emd_A_avg = emd_A_total / len(noisy_gamma_batches)
+        emd_B_avg = emd_B_total / len(emp_rayleigh_batches)
 
-        ks_stat_A = ks_2samp(self.emp.flatten().numpy(), noisy_a.flatten().numpy()).statistic
-        ks_stat_B = ks_2samp(self.emp.flatten().numpy(), noisy_b.flatten().numpy()).statistic
-        print(ks_stat_A)
-        print(ks_stat_B)
+        ks_stat_A = ks_2samp(self.emp_gamma.flatten().numpy(), noisy_gamma.flatten().numpy()).statistic
+        ks_stat_B = ks_2samp(self.emp_rayleigh.flatten().numpy(), noisy_rayleigh.flatten().numpy()).statistic
 
         if epoch % 50 == 0 or epoch == 1:
             path = ''
             if self.opt.isTrain:
                 path = f'/blue/azare/samgallic/Research/new_cycle_gan/checkpoints/{self.opt.name}/histograms'
+                os.makedirs(path, exist_ok=True)
+                histogram.plot_pdf_with_rayleigh(noisy_gamma.cpu(), self.emp_gamma.cpu(), f'Epoch {epoch} Rayleigh2Gamma', f'{path}/Epoch_{epoch}_Gamma.png')
+                histogram.plot_pdf_with_rayleigh(noisy_rayleigh.cpu(), self.emp_rayleigh.cpu(), f'Epoch {epoch} Gamma2Rayleigh', f'{path}/Epoch_{epoch}_Rayleigh.png')
             else:
                 path = f'/blue/azare/samgallic/Research/new_cycle_gan/results/{self.opt.name}/histograms'
-            os.makedirs(path, exist_ok=True)
-            histogram.plot_pdf_with_rayleigh(noisy_a.cpu(), self.emp.cpu(), f'Test Normal2Noisy', f'{path}/test_A.png')
-            histogram.plot_pdf_with_rayleigh(noisy_b.cpu(), self.emp.cpu(), f'Test Noisy2Normal', f'{path}/test_B.png')
+                os.makedirs(path, exist_ok=True)
+                histogram.plot_pdf_with_rayleigh(noisy_rayleigh.cpu(), self.emp_rayleigh.cpu(), f'Test Gamma2Rayleigh', f'{path}/test_Rayleigh.png')
+                histogram.plot_pdf_with_rayleigh(noisy_gamma.cpu(), self.emp_gamma.cpu(), f'Test Rayleigh2Gamma', f'{path}/test_Gamma.png')
 
         return {'emd_A': emd_A_avg, 'emd_B': emd_B_avg, 'ks_A': ks_stat_A, 'ks_B': ks_stat_B}
 
