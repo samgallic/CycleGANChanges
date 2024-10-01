@@ -39,31 +39,23 @@ class UnalignedDataset(BaseDataset):
         print(self.transform_B)
 
     def __getitem__(self, index):
-        """Return a data point and its metadata information.
+        A_path = self.A_paths[index % self.A_size]
+        if self.opt.serial_batches:
+            B_path = self.B_paths[index % self.B_size]
+        else:
+            B_paths_shuffled = self.B_paths.copy()  # Copy B paths
+            random.shuffle(B_paths_shuffled)  # Shuffle for each instance
+            B_path = B_paths_shuffled[0]  # Pick the first one from shuffled
 
-        Parameters:
-            index (int)      -- a random integer for data indexing
-
-        Returns a dictionary that contains A, B, A_paths and B_paths
-            A (tensor)       -- an image in the input domain
-            B (tensor)       -- its corresponding image in the target domain
-            A_paths (str)    -- image paths
-            B_paths (str)    -- image paths
-        """
-        A_path = self.A_paths[index % self.A_size]  # make sure index is within then range
-        if self.opt.serial_batches:   # make sure index is within then range
-            index_B = index % self.B_size
-        else:   # randomize the index for domain B to avoid fixed pairs.
-            index_B = random.randint(0, self.B_size - 1)
-        B_path = self.B_paths[index_B]
         A_img = Image.open(A_path).convert('RGB')
         B_img = Image.open(B_path).convert('RGB')
-        # apply image transformation
+
+        # Apply transformations
         A = self.transform_A(A_img)
         B = self.transform_B(B_img)
 
         return {'A': A, 'B': B, 'A_paths': A_path, 'B_paths': B_path}
-
+    
     def __len__(self):
         """Return the total number of images in the dataset.
 
