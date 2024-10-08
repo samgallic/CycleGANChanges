@@ -225,10 +225,12 @@ class Visualizer():
         grouped["A_loss/D_A"] = losses["D_A"]
         grouped["A_loss/cycle_A"] = losses["cycle_A"]
         grouped["A_loss/idt_A"] = losses["idt_A"]
+        grouped["A_loss/noise_A"] = losses["noise_A"]
         grouped["B_loss/G_B"] = losses["G_B"]
         grouped["B_loss/D_B"] = losses["D_B"]
         grouped["B_loss/cycle_B"] = losses["cycle_B"]
         grouped["B_loss/idt_B"] = losses["idt_B"]
+        grouped["B_loss/noise_B"] = losses["noise_B"]
 
         epoch_dict = {}
         epoch_dict["Epoch"] = epoch

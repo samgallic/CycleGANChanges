@@ -5,7 +5,10 @@ import copy
 from data.unaligned_dataset import UnalignedDataset
 from PIL import Image
 import os
-from scipy.stats import wasserstein_distance
+
+def debug_tensor(tensor, name):
+    print(f"Debugging tensor {name}:")
+    print(f"Mean: {tensor.mean().item()}, Min: {tensor.min().item()}, Max: {tensor.max().item()}, Std: {tensor.std().item()}")
 
 def load_images_from_folder(folder_path):
     image_dict = {}
@@ -95,10 +98,6 @@ class DistanceCalc:
             noise_ray = (b - self.unnoise_A[path_A]).view(-1).float()
             noise_gam = (self.unnoise_B[path_B] - a).view(-1).float()
 
-            # # Ensure tensors are on the same device
-            # noise_ray = noise_ray.to(model.device)
-            # noise_gam = noise_gam.to(model.device)
-
             wd_ray = self.loss(noise_ray, self.emp_rayleigh)
             wd_gam = self.loss(noise_gam, self.emp_gamma)
 
@@ -111,17 +110,22 @@ class DistanceCalc:
             print("No paths found in model.paths['A'].")
             return 0.0  # Avoid division by zero
         noisy_gam_avg = (noise_gam_total / num_paths).item()
-        print(noisy_gam_avg)
         noisy_ray_avg = (noise_ray_total / num_paths).item()
-        print(noisy_ray_avg)
-        
-        # Return the combined distance
-        model.netG_A.train()
-        model.netG_B.train()
 
-        return abs(noisy_gam_avg) + abs(noisy_ray_avg)
+        return noisy_ray_avg, noisy_gam_avg
     
-    def loss(self, tensor1, tensor2):
-        tensor1, _ = tensor1.sort()
-        tensor2, _ = tensor2.sort()
-        return (abs(tensor1 - tensor2)).mean()
+    def loss(self, sample, empirical):
+        # Determine the min and max from both tensors
+        data_min = min(sample.min(), empirical.min())
+        data_max = max(sample.max(), empirical.max())
+
+        # Define the bins based on the min and max values
+        bins = torch.linspace(data_min.item(), data_max.item(), steps=500)
+
+        # Calculate the histograms for each tensor
+        hist1 = torch.histc(sample, bins=len(bins), min=bins.min().item(), max=bins.max().item())
+        hist2 = torch.histc(empirical, bins=len(bins), min=bins.min().item(), max=bins.max().item())
+
+        # Subtract the histograms element-wise
+        hist_diff = torch.abs(hist1 - hist2).mean()
+        return hist_diff
