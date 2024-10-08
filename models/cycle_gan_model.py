@@ -41,6 +41,7 @@ class CycleGANModel(BaseModel):
             parser.add_argument('--lambda_A', type=float, default=10.0, help='weight for cycle loss (A -> B -> A)')
             parser.add_argument('--lambda_B', type=float, default=10.0, help='weight for cycle loss (B -> A -> B)')
             parser.add_argument('--lambda_identity', type=float, default=0.5, help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
+            parser.add_argument('--lambda_noise', type=float, default=10.0, help='weight for noise term')
 
         return parser
 
@@ -177,8 +178,8 @@ class CycleGANModel(BaseModel):
         self.loss_cycle_B = self.criterionCycle(self.rec_B, self.real_B) * lambda_B
         # Noise Loss
         self.loss_noise_A, self.loss_noise_B = self.dist_calc.earth_movers(self)
-        self.loss_noise_A = self.loss_noise_A * 1000000.0
-        self.loss_noise_B = self.loss_noise_B * 1000000.0
+        self.loss_noise_A = self.loss_noise_A * self.opt.lambda_noise
+        self.loss_noise_B = self.loss_noise_B * self.opt.lambda_noise
         # combined loss and calculate gradients
         self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B + self.loss_noise_A + self.loss_noise_B
         self.loss_G.backward()
