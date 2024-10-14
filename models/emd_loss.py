@@ -5,6 +5,59 @@ import copy
 from data.unaligned_dataset import UnalignedDataset
 from PIL import Image
 import os
+import matplotlib.pyplot as plt
+
+def loss(sample, empirical):
+    # Ensure tensors are on the same device (i.e., CUDA if available)
+    assert sample.device == empirical.device, "Tensors should be on the same device."
+
+    # Ensure that the tensors do not contain NaN or Inf values
+    if torch.isnan(sample).any() or torch.isnan(empirical).any():
+        raise ValueError("Input tensors contain NaN values")
+    if torch.isinf(sample).any() or torch.isinf(empirical).any():
+        raise ValueError("Input tensors contain Inf values")
+
+    # Determine the min and max from both tensors
+    data_min = min(sample.min(), empirical.min())
+    data_max = max(sample.max(), empirical.max())
+
+    # Define the bins based on the min and max values
+    bins = torch.linspace(data_min.item(), data_max.item(), steps=500, device=sample.device)
+
+    # Compute histograms (make sure they are on the same device)
+    hist1 = torch.histc(sample, bins=len(bins), min=bins.min().item(), max=bins.max().item())
+    hist2 = torch.histc(empirical, bins=len(bins), min=bins.min().item(), max=bins.max().item())
+
+    # # Normalize histograms
+    # hist1 /= hist1.sum()
+    # hist2 /= hist2.sum()
+
+    cdf_1 = torch.cumsum(hist1, dim=0)
+    cdf_2 = torch.cumsum(hist2, dim=0)
+
+    cdf_1 /= cdf_1.clone()[-1]
+    cdf_2 /= cdf_2.clone()[-1]
+
+    # Subtract the histograms element-wise
+    cdf_diff = torch.abs(cdf_1 - cdf_2).sum()
+
+    # plt.figure(figsize=(10, 6))
+
+    # # Plot histograms
+    # plt.plot(cdf_1.cpu().numpy(), label="Data 1", color='blue', alpha=0.7)
+    # plt.plot(cdf_2.cpu().numpy(), label="Data 2", color='green', alpha=0.7)
+
+    # # Add labels and legend
+    # plt.xlabel('Bins')
+    # plt.ylabel('Frequency')
+    # plt.legend(loc='upper right')
+
+    # # Save as PNG
+    # plt.savefig('histograms.png')
+    # plt.close()
+
+    # Return the difference (convert tensor to float)
+    return cdf_diff.item()  # Ensure the return type is a float
 
 def debug_tensor(tensor, name):
     print(f"Debugging tensor {name}:")
@@ -98,8 +151,8 @@ class DistanceCalc:
             noise_ray = (b - self.unnoise_A[path_A]).view(-1).float()
             noise_gam = (self.unnoise_B[path_B] - a).view(-1).float()
 
-            wd_ray = self.loss(noise_ray, self.emp_rayleigh)
-            wd_gam = self.loss(noise_gam, self.emp_gamma)
+            wd_ray = loss(noise_ray, self.emp_rayleigh)
+            wd_gam = loss(noise_gam, self.emp_gamma)
 
             noise_ray_total += wd_ray
             noise_gam_total += wd_gam
@@ -109,23 +162,7 @@ class DistanceCalc:
         if num_paths == 0:
             print("No paths found in model.paths['A'].")
             return 0.0  # Avoid division by zero
-        noisy_gam_avg = (noise_gam_total / num_paths).item()
-        noisy_ray_avg = (noise_ray_total / num_paths).item()
+        noisy_gam_avg = noise_gam_total / num_paths
+        noisy_ray_avg = noise_ray_total / num_paths
 
         return noisy_ray_avg, noisy_gam_avg
-    
-    def loss(self, sample, empirical):
-        # Determine the min and max from both tensors
-        data_min = min(sample.min(), empirical.min())
-        data_max = max(sample.max(), empirical.max())
-
-        # Define the bins based on the min and max values
-        bins = torch.linspace(data_min.item(), data_max.item(), steps=500)
-
-        # Calculate the histograms for each tensor
-        hist1 = torch.histc(sample, bins=len(bins), min=bins.min().item(), max=bins.max().item())
-        hist2 = torch.histc(empirical, bins=len(bins), min=bins.min().item(), max=bins.max().item())
-
-        # Subtract the histograms element-wise
-        hist_diff = torch.abs(hist1 - hist2).mean()
-        return hist_diff
