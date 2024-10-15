@@ -42,6 +42,7 @@ class CycleGANModel(BaseModel):
             parser.add_argument('--lambda_B', type=float, default=10.0, help='weight for cycle loss (B -> A -> B)')
             parser.add_argument('--lambda_identity', type=float, default=0.5, help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
             parser.add_argument('--lambda_noise', type=float, default=1.0, help='weight for noise term')
+            parser.add_argument('--no_disc', action='store_true', help='no adversarial loss')
 
         return parser
 
@@ -143,19 +144,26 @@ class CycleGANModel(BaseModel):
 
     def backward_D_A(self):
         """Calculate GAN loss for discriminator D_A"""
-        fake_B = self.fake_B_pool.query(self.fake_B)
-        self.loss_D_A = self.backward_D_basic(self.netD_A, self.real_B, fake_B)
+        if self.opt.no_disc:
+            self.loss_D_A = 0.0
+        else:
+            fake_B = self.fake_B_pool.query(self.fake_B)
+            self.loss_D_A = self.backward_D_basic(self.netD_A, self.real_B, fake_B)
 
     def backward_D_B(self):
         """Calculate GAN loss for discriminator D_B"""
-        fake_A = self.fake_A_pool.query(self.fake_A)
-        self.loss_D_B = self.backward_D_basic(self.netD_B, self.real_A, fake_A)
+        if self.opt.no_disc:
+            self.loss_D_A = 0.0
+        else:
+            fake_A = self.fake_A_pool.query(self.fake_A)
+            self.loss_D_B = self.backward_D_basic(self.netD_B, self.real_A, fake_A)
 
     def backward_G(self):
         """Calculate the loss for generators G_A and G_B"""
         lambda_idt = self.opt.lambda_identity
         lambda_A = self.opt.lambda_A
         lambda_B = self.opt.lambda_B
+        
         # Identity loss
         if lambda_idt > 0:
             # G_A should be identity if real_B is fed: ||G_A(B) - B||
@@ -169,17 +177,32 @@ class CycleGANModel(BaseModel):
             self.loss_idt_B = 0
 
         # GAN loss D_A(G_A(A))
-        self.loss_G_A = self.criterionGAN(self.netD_A(self.fake_B), True)
         # GAN loss D_B(G_B(B))
-        self.loss_G_B = self.criterionGAN(self.netD_B(self.fake_A), True)
+        if self.opt.no_disc:
+            self.loss_G_A = 0.0
+            self.loss_G_B = 0.0
+        else:
+            self.loss_G_A = self.criterionGAN(self.netD_A(self.fake_B), True)
+            self.loss_G_B = self.criterionGAN(self.netD_B(self.fake_A), True)
+
         # Forward cycle loss || G_B(G_A(A)) - A||
-        self.loss_cycle_A = self.criterionCycle(self.rec_A, self.real_A) * lambda_A
         # Backward cycle loss || G_A(G_B(B)) - B||
-        self.loss_cycle_B = self.criterionCycle(self.rec_B, self.real_B) * lambda_B
+        if lambda_A > 0 and lambda_B > 0:
+            self.loss_cycle_A = self.criterionCycle(self.rec_A, self.real_A) * lambda_A
+            self.loss_cycle_B = self.criterionCycle(self.rec_B, self.real_B) * lambda_B
+        else:
+            self.loss_cycle_A = 0.0
+            self.loss_cycle_B = 0.0
+
         # Noise Loss
-        self.loss_noise_A, self.loss_noise_B = self.dist_calc.earth_movers(self)
-        self.loss_noise_A = self.loss_noise_A * self.opt.lambda_noise
-        self.loss_noise_B = self.loss_noise_B * self.opt.lambda_noise
+        if self.opt.lambda_noise > 0:
+            self.loss_noise_A, self.loss_noise_B = self.dist_calc.earth_movers(self)
+            self.loss_noise_A = self.loss_noise_A * self.opt.lambda_noise
+            self.loss_noise_B = self.loss_noise_B * self.opt.lambda_noise
+        else:
+            self.loss_noise_A = 0.0
+            self.loss_noise_B = 0.0
+        
         # combined loss and calculate gradients
         self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B + self.loss_noise_A + self.loss_noise_B
         self.loss_G.backward()

@@ -128,12 +128,12 @@ class DistanceCalc:
         self.emp_gamma = torch.cat(noises_A).view(-1).float().to(model.device)
         self.emp_rayleigh = torch.cat(noises_B).view(-1).float().to(model.device)
 
-        k = 256*256
-        indices_gam = torch.randperm(self.emp_gamma.size(0))[:k]
-        indices_ray = torch.randperm(self.emp_rayleigh.size(0))[:k]
+        # k = 256*256
+        # indices_gam = torch.randperm(self.emp_gamma.size(0))[:k]
+        # indices_ray = torch.randperm(self.emp_rayleigh.size(0))[:k]
 
-        self.emp_gamma = self.emp_gamma[indices_gam]
-        self.emp_rayleigh = self.emp_rayleigh[indices_ray]
+        # self.emp_gamma = self.emp_gamma[indices_gam]
+        # self.emp_rayleigh = self.emp_rayleigh[indices_ray]
         
         # Debug: Check tensor dimensions
         print(f"emp_gamma shape: {self.emp_gamma.shape}")
