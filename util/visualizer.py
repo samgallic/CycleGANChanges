@@ -74,6 +74,7 @@ class Visualizer():
         self.win_size = opt.display_winsize
         self.name = opt.name
         self.port = opt.display_port
+        self.wandb_images = not opt.no_img_wandb
         self.saved = False
         self.use_wandb = opt.use_wandb
         self.wandb_project_name = opt.wandb_project_name
@@ -170,7 +171,7 @@ class Visualizer():
                 except VisdomExceptionBase:
                     self.create_visdom_connections()
 
-        if self.use_wandb:
+        if self.use_wandb and self.wandb_images:
             columns = [key for key, _ in visuals.items()]
             columns.insert(0, 'epoch')
             result_table = wandb.Table(columns=columns)

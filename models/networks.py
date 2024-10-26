@@ -155,6 +155,8 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = UnetGenerator(input_nc, output_nc, 7, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'unet_256':
         net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
+    elif netG == 'noise':
+        net = NoiseGenerator()
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -373,6 +375,37 @@ class ResnetGenerator(nn.Module):
         """Standard forward"""
         return self.model(input)
 
+class NoiseGenerator(nn.Module):
+    def __init__(self):
+        super(NoiseGenerator, self).__init__()
+        model = [
+            nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=3, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(64, 1, kernel_size=3, stride=1, padding=3, bias=False),
+            nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=3, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(64, 1, kernel_size=3, stride=1, padding=3, bias=False),
+            nn.Tanh()
+        ]
+        self.model = nn.Sequential(*model)
+
+    def forward(self, input):
+        added_batch_dim = False
+        # Check if input has a batch dimension (4D tensor); if not, add one
+        if input.dim() == 3:
+            input = input.unsqueeze(0)  # Add batch dimension
+            added_batch_dim = True
+            
+        # Process the input through the model
+        output = self.model(input)
+        
+        # Remove batch dimension if it was originally a single image
+        if added_batch_dim:
+            output = output.squeeze(0)
+            
+        return output
 
 class ResnetBlock(nn.Module):
     """Define a Resnet block"""

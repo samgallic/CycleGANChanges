@@ -6,6 +6,7 @@ from data.unaligned_dataset import UnalignedDataset
 from PIL import Image
 import os
 import matplotlib.pyplot as plt
+from util.util import tensor2im, save_image
 
 def loss(sample, empirical):
     # Ensure tensors are on the same device (i.e., CUDA if available)
@@ -127,29 +128,53 @@ class DistanceCalc:
         # Store the entire distribution of noises as 1D tensors
         self.emp_gamma = torch.cat(noises_A).view(-1).float().to(model.device)
         self.emp_rayleigh = torch.cat(noises_B).view(-1).float().to(model.device)
-
-        # k = 256*256
-        # indices_gam = torch.randperm(self.emp_gamma.size(0))[:k]
-        # indices_ray = torch.randperm(self.emp_rayleigh.size(0))[:k]
-
-        # self.emp_gamma = self.emp_gamma[indices_gam]
-        # self.emp_rayleigh = self.emp_rayleigh[indices_ray]
         
-        # Debug: Check tensor dimensions
-        print(f"emp_gamma shape: {self.emp_gamma.shape}")
-        print(f"emp_rayleigh shape: {self.emp_rayleigh.shape}")
+        self.sanity_path = "/blue/azare/samgallic/Research/new_cycle_gan/checkpoints/" + self.opt.name + "/sanity_check"
+        os.makedirs(self.sanity_path, exist_ok=True)
 
     def earth_movers(self, model):
         noise_gam_total = 0.0
         noise_ray_total = 0.0
         
-        for path_A, path_B, a, b in zip(model.paths['A'], model.paths['B'], model.fake_A, model.fake_B):
+        # for path_A, path_B, a, b in zip(model.paths['A'], model.paths['B'], model.fake_A, model.fake_B):
+        #     path_A = os.path.basename(path_A)
+        #     path_B = os.path.basename(path_B)
+
+        #     # Compute noise for the generated images
+        #     noise_ray = (b - self.unnoise_A[path_A]).view(-1).float()
+        #     noise_gam = (self.unnoise_B[path_B] - a).view(-1).float()
+
+        #     wd_ray = loss(noise_ray, self.emp_rayleigh)
+        #     wd_gam = loss(noise_gam, self.emp_gamma)
+
+        #     noise_ray_total += wd_ray
+        #     noise_gam_total += wd_gam
+
+        for path_A, path_B, in zip(model.paths['A'], model.paths['B']):
             path_A = os.path.basename(path_A)
             path_B = os.path.basename(path_B)
+
+            b = model.netG_A(self.real_A[path_A])
+            a = model.netG_B(self.real_B[path_B])
 
             # Compute noise for the generated images
             noise_ray = (b - self.unnoise_A[path_A]).view(-1).float()
             noise_gam = (self.unnoise_B[path_B] - a).view(-1).float()
+
+            # img_b = tensor2im(b)
+            # img_a = tensor2im(a)
+            # save_image(img_b, self.sanity_path + "/" + "fake_b_" + path_A)
+            # save_image(img_a, self.sanity_path + "/" + "fake_a_" + path_B)
+
+            # img_b = tensor2im(self.unnoise_B[path_B])
+            # img_a = tensor2im(self.unnoise_A[path_A])
+            # save_image(img_a, self.sanity_path + "/" + "unnoise_a_" + path_A)
+            # save_image(img_b, self.sanity_path + "/" + "unnoise_b_" + path_B)
+
+            # img_b = tensor2im(self.real_B[path_B])
+            # img_a = tensor2im(self.real_A[path_A])
+            # save_image(img_a, self.sanity_path + "/" + "real_a_" + path_A)
+            # save_image(img_b, self.sanity_path + "/" + "real_b_" + path_B)
 
             wd_ray = loss(noise_ray, self.emp_rayleigh)
             wd_gam = loss(noise_gam, self.emp_gamma)
@@ -164,5 +189,8 @@ class DistanceCalc:
             return 0.0  # Avoid division by zero
         noisy_gam_avg = noise_gam_total / num_paths
         noisy_ray_avg = noise_ray_total / num_paths
+
+        noisy_ray_avg = torch.tensor(noisy_ray_avg, requires_grad=True)
+        noisy_gam_avg = torch.tensor(noisy_gam_avg, requires_grad=True)
 
         return noisy_ray_avg, noisy_gam_avg
