@@ -29,10 +29,6 @@ def loss(sample, empirical):
     hist1 = torch.histc(sample, bins=len(bins), min=bins.min().item(), max=bins.max().item())
     hist2 = torch.histc(empirical, bins=len(bins), min=bins.min().item(), max=bins.max().item())
 
-    # # Normalize histograms
-    # hist1 /= hist1.sum()
-    # hist2 /= hist2.sum()
-
     cdf_1 = torch.cumsum(hist1, dim=0)
     cdf_2 = torch.cumsum(hist2, dim=0)
 
@@ -42,22 +38,6 @@ def loss(sample, empirical):
     # Subtract the histograms element-wise
     cdf_diff = torch.abs(cdf_1 - cdf_2).sum()
 
-    # plt.figure(figsize=(10, 6))
-
-    # # Plot histograms
-    # plt.plot(cdf_1.cpu().numpy(), label="Data 1", color='blue', alpha=0.7)
-    # plt.plot(cdf_2.cpu().numpy(), label="Data 2", color='green', alpha=0.7)
-
-    # # Add labels and legend
-    # plt.xlabel('Bins')
-    # plt.ylabel('Frequency')
-    # plt.legend(loc='upper right')
-
-    # # Save as PNG
-    # plt.savefig('histograms.png')
-    # plt.close()
-
-    # Return the difference (convert tensor to float)
     return cdf_diff.item()  # Ensure the return type is a float
 
 def debug_tensor(tensor, name):
@@ -135,20 +115,6 @@ class DistanceCalc:
     def earth_movers(self, model):
         noise_gam_total = 0.0
         noise_ray_total = 0.0
-        
-        # for path_A, path_B, a, b in zip(model.paths['A'], model.paths['B'], model.fake_A, model.fake_B):
-        #     path_A = os.path.basename(path_A)
-        #     path_B = os.path.basename(path_B)
-
-        #     # Compute noise for the generated images
-        #     noise_ray = (b - self.unnoise_A[path_A]).view(-1).float()
-        #     noise_gam = (self.unnoise_B[path_B] - a).view(-1).float()
-
-        #     wd_ray = loss(noise_ray, self.emp_rayleigh)
-        #     wd_gam = loss(noise_gam, self.emp_gamma)
-
-        #     noise_ray_total += wd_ray
-        #     noise_gam_total += wd_gam
 
         for path_A, path_B, in zip(model.paths['A'], model.paths['B']):
             path_A = os.path.basename(path_A)
@@ -160,21 +126,6 @@ class DistanceCalc:
             # Compute noise for the generated images
             noise_ray = (b - self.unnoise_A[path_A]).view(-1).float()
             noise_gam = (self.unnoise_B[path_B] - a).view(-1).float()
-
-            # img_b = tensor2im(b)
-            # img_a = tensor2im(a)
-            # save_image(img_b, self.sanity_path + "/" + "fake_b_" + path_A)
-            # save_image(img_a, self.sanity_path + "/" + "fake_a_" + path_B)
-
-            # img_b = tensor2im(self.unnoise_B[path_B])
-            # img_a = tensor2im(self.unnoise_A[path_A])
-            # save_image(img_a, self.sanity_path + "/" + "unnoise_a_" + path_A)
-            # save_image(img_b, self.sanity_path + "/" + "unnoise_b_" + path_B)
-
-            # img_b = tensor2im(self.real_B[path_B])
-            # img_a = tensor2im(self.real_A[path_A])
-            # save_image(img_a, self.sanity_path + "/" + "real_a_" + path_A)
-            # save_image(img_b, self.sanity_path + "/" + "real_b_" + path_B)
 
             wd_ray = loss(noise_ray, self.emp_rayleigh)
             wd_gam = loss(noise_gam, self.emp_gamma)
