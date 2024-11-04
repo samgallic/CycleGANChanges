@@ -146,9 +146,13 @@ class DistanceCalc:
             path = ''
             if self.opt.isTrain:
                 path = f'/blue/azare/samgallic/Research/new_cycle_gan/checkpoints/{self.opt.name}/histograms'
+                ray_path = path + '/Gamma2Rayleigh'
+                gam_path = path + '/Rayleigh2Gamma'
                 os.makedirs(path, exist_ok=True)
-                histogram.plot_pdf_with_rayleigh(noisy_gamma.cpu(), self.emp_gamma.cpu(), f'Epoch {epoch} Rayleigh2Gamma', f'{path}/Epoch_{epoch}_Gamma.png')
-                histogram.plot_pdf_with_rayleigh(noisy_rayleigh.cpu(), self.emp_rayleigh.cpu(), f'Epoch {epoch} Gamma2Rayleigh', f'{path}/Epoch_{epoch}_Rayleigh.png')
+                os.makedirs(gam_path, exist_ok=True)
+                os.makedirs(ray_path, exist_ok=True)
+                histogram.plot_pdf_with_rayleigh(noisy_gamma.cpu(), self.emp_gamma.cpu(), f'Epoch {epoch} Rayleigh2Gamma', f'{gam_path}/Epoch_{epoch}_Gamma.png')
+                histogram.plot_pdf_with_rayleigh(noisy_rayleigh.cpu(), self.emp_rayleigh.cpu(), f'Epoch {epoch} Gamma2Rayleigh', f'{ray_path}/Epoch_{epoch}_Rayleigh.png')
             else:
                 path = f'/blue/azare/samgallic/Research/new_cycle_gan/results/{self.opt.name}/histograms'
                 os.makedirs(path, exist_ok=True)

@@ -26,6 +26,7 @@ from util.visualizer import Visualizer
 import sonar.log_weights as log_weights
 import sonar.loss_csv as loss_csv
 import sonar.earth_movers as earth_movers
+import sonar.combine as combine
 
 if __name__ == '__main__':
     start_time = time.time()
@@ -95,3 +96,4 @@ if __name__ == '__main__':
     print("Number written to file successfully.")
 
     loss_csv.loss_csv(opt.name)
+    combine(opt.name)

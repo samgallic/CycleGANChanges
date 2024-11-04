@@ -5,40 +5,7 @@ import copy
 from data.unaligned_dataset import UnalignedDataset
 from PIL import Image
 import os
-import matplotlib.pyplot as plt
-from util.util import tensor2im, save_image
-
-def loss(sample, empirical):
-    # Ensure tensors are on the same device (i.e., CUDA if available)
-    assert sample.device == empirical.device, "Tensors should be on the same device."
-
-    # Ensure that the tensors do not contain NaN or Inf values
-    if torch.isnan(sample).any() or torch.isnan(empirical).any():
-        raise ValueError("Input tensors contain NaN values")
-    if torch.isinf(sample).any() or torch.isinf(empirical).any():
-        raise ValueError("Input tensors contain Inf values")
-
-    # Determine the min and max from both tensors
-    data_min = min(sample.min(), empirical.min())
-    data_max = max(sample.max(), empirical.max())
-
-    # Define the bins based on the min and max values
-    bins = torch.linspace(data_min.item(), data_max.item(), steps=500, device=sample.device)
-
-    # Compute histograms (make sure they are on the same device)
-    hist1 = torch.histc(sample, bins=len(bins), min=bins.min().item(), max=bins.max().item())
-    hist2 = torch.histc(empirical, bins=len(bins), min=bins.min().item(), max=bins.max().item())
-
-    cdf_1 = torch.cumsum(hist1, dim=0)
-    cdf_2 = torch.cumsum(hist2, dim=0)
-
-    cdf_1 /= cdf_1.clone()[-1]
-    cdf_2 /= cdf_2.clone()[-1]
-
-    # Subtract the histograms element-wise
-    cdf_diff = torch.abs(cdf_1 - cdf_2).sum()
-
-    return cdf_diff.item()  # Ensure the return type is a float
+import kornia
 
 def debug_tensor(tensor, name):
     print(f"Debugging tensor {name}:")
@@ -108,15 +75,51 @@ class DistanceCalc:
         # Store the entire distribution of noises as 1D tensors
         self.emp_gamma = torch.cat(noises_A).view(-1).float().to(model.device)
         self.emp_rayleigh = torch.cat(noises_B).view(-1).float().to(model.device)
+
+        indices = torch.randperm(self.emp_gamma.size(0))[:(256*256)]
+        self.emp_gamma = self.emp_gamma[indices]
+        self.emp_rayleigh = self.emp_rayleigh[indices]
+
+        self.num_bins = 256
+        self.bandwidth = torch.tensor(0.1, device=model.device)
         
         self.sanity_path = "/blue/azare/samgallic/Research/new_cycle_gan/checkpoints/" + self.opt.name + "/sanity_check"
         os.makedirs(self.sanity_path, exist_ok=True)
+
+        self.compute_bins()
+        self.compute_empirical_histograms()
+
+    def compute_bins(self):
+        # Compute the min and max for bin edges
+        self.emp_gamma_min = self.emp_gamma.min()
+        self.emp_gamma_max = self.emp_gamma.max()
+        self.emp_rayleigh_min = self.emp_rayleigh.min()
+        self.emp_rayleigh_max = self.emp_rayleigh.max()
+
+        # Create bins for gamma and rayleigh without unsqueeze(0)
+        self.bins_gamma = torch.linspace(
+            self.emp_gamma_min, self.emp_gamma_max, steps=self.num_bins, device=self.emp_gamma.device
+        )  # Shape: (num_bins,)
+
+        self.bins_rayleigh = torch.linspace(
+            self.emp_rayleigh_min, self.emp_rayleigh_max, steps=self.num_bins, device=self.emp_rayleigh.device
+        )  # Shape: (num_bins,)
+
+    def compute_empirical_histograms(self):
+        self.emp_gamma_hist = self.compute_histogram(self.emp_gamma, self.bins_gamma)
+        self.emp_rayleigh_hist = self.compute_histogram(self.emp_rayleigh, self.bins_rayleigh)
+
+    def compute_histogram(self, data, bins):
+        data = data.unsqueeze(0)  # Shape: (1, N)
+        hist = kornia.enhance.histogram(data, bins, self.bandwidth)
+        hist = hist / (hist.sum() + 1e-10)  # Normalize histogram
+        return hist  # Shape: (1, num_bins)
 
     def earth_movers(self, model):
         noise_gam_total = 0.0
         noise_ray_total = 0.0
 
-        for path_A, path_B, in zip(model.paths['A'], model.paths['B']):
+        for path_A, path_B in zip(model.paths['A'], model.paths['B']):
             path_A = os.path.basename(path_A)
             path_B = os.path.basename(path_B)
 
@@ -124,24 +127,30 @@ class DistanceCalc:
             a = model.netG_B(self.real_B[path_B])
 
             # Compute noise for the generated images
-            noise_ray = (b - self.unnoise_A[path_A]).view(-1).float()
-            noise_gam = (self.unnoise_B[path_B] - a).view(-1).float()
+            noise_ray = (b - self.unnoise_A[path_A]).view(-1)
+            noise_gam = (self.unnoise_B[path_B] - a).view(-1)
 
-            wd_ray = loss(noise_ray, self.emp_rayleigh)
-            wd_gam = loss(noise_gam, self.emp_gamma)
+            # Compute histograms
+            hist_noise_ray = self.compute_histogram(noise_ray, self.bins_rayleigh)
+            hist_noise_gam = self.compute_histogram(noise_gam, self.bins_gamma)
+
+            # Normalize histograms
+            hist_noise_ray = hist_noise_ray / (hist_noise_ray.sum() + 1e-10)
+            hist_noise_gam = hist_noise_gam / (hist_noise_gam.sum() + 1e-10)
+
+            # Compute loss between histograms
+            wd_ray = torch.nn.functional.l1_loss(hist_noise_ray, self.emp_rayleigh_hist)
+            wd_gam = torch.nn.functional.l1_loss(hist_noise_gam, self.emp_gamma_hist)
 
             noise_ray_total += wd_ray
             noise_gam_total += wd_gam
 
-        # Average out the distances over the number of paths (batch size)
         num_paths = len(model.paths['A'])
         if num_paths == 0:
             print("No paths found in model.paths['A'].")
-            return 0.0  # Avoid division by zero
+            return 0.0, 0.0
+
         noisy_gam_avg = noise_gam_total / num_paths
         noisy_ray_avg = noise_ray_total / num_paths
-
-        noisy_ray_avg = torch.tensor(noisy_ray_avg, requires_grad=True)
-        noisy_gam_avg = torch.tensor(noisy_gam_avg, requires_grad=True)
 
         return noisy_ray_avg, noisy_gam_avg
