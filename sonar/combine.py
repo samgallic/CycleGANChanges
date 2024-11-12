@@ -53,4 +53,5 @@ def combine(name):
     final_image_B.paste(images_B[4], (width * 3 // 2, height))
 
     # Save or show the final image
-    final_image_B.save('final_rayleigh2gamma.png')
+    final_image_B.save(path_B + 'final_rayleigh2gamma.png')
+    

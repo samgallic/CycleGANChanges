@@ -207,9 +207,6 @@ class CycleGANModel(BaseModel):
         
         # combined loss and calculate gradients
         self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B + self.loss_noise_A + self.loss_noise_B
-        print("noise A: ", self.loss_noise_A)
-        print("noise_B: ", self.loss_noise_B)
-        print("loss G: ", self.loss_G)
         self.loss_G.backward()
 
     def optimize_parameters(self):

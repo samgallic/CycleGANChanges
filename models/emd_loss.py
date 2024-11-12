@@ -6,6 +6,7 @@ from data.unaligned_dataset import UnalignedDataset
 from PIL import Image
 import os
 import kornia
+from models.conditional import ConditionalHists, loss
 
 def debug_tensor(tensor, name):
     print(f"Debugging tensor {name}:")
@@ -24,6 +25,7 @@ class DistanceCalc:
     def __init__(self, model):
         # Create a deep copy of the opt object to avoid modifying the original
         self.opt = copy.deepcopy(model.opt)
+        self.device = model.device
         
         # Ensure no changes to the original opt
         self.opt.no_flip = True
@@ -82,12 +84,19 @@ class DistanceCalc:
 
         self.num_bins = 256
         self.bandwidth = torch.tensor(0.1, device=model.device)
-        
-        self.sanity_path = "/blue/azare/samgallic/Research/new_cycle_gan/checkpoints/" + self.opt.name + "/sanity_check"
-        os.makedirs(self.sanity_path, exist_ok=True)
-
         self.compute_bins()
-        self.compute_empirical_histograms()
+
+        if(self.opt.noise_loss_type == 'normal'):
+            self.compute_bins()
+            self.compute_empirical_histograms()
+        elif(self.opt.noise_loss_type == 'conditional'):
+            self.histograms_A = ConditionalHists(self.real_A, self.unnoise_A, self.bins_gamma, self)
+            self.histograms_B = ConditionalHists(self.real_B, self.unnoise_B, self.bins_rayleigh, self)
+            print('I did it :)')
+            AssertionError('I stop :)')
+        else:
+            AssertionError('Loss type not recognized')
+
 
     def compute_bins(self):
         # Compute the min and max for bin edges
@@ -115,40 +124,68 @@ class DistanceCalc:
         hist = hist / (hist.sum() + 1e-10)  # Normalize histogram
         return hist  # Shape: (1, num_bins)
 
-    def earth_movers(self, model):
+    def earth_movers(self, model, isTest=False):
         noise_gam_total = 0.0
         noise_ray_total = 0.0
 
-        for path_A, path_B in zip(model.paths['A'], model.paths['B']):
-            path_A = os.path.basename(path_A)
-            path_B = os.path.basename(path_B)
-
-            b = model.netG_A(self.real_A[path_A])
-            a = model.netG_B(self.real_B[path_B])
-
-            # Compute noise for the generated images
-            noise_ray = (b - self.unnoise_A[path_A]).view(-1)
-            noise_gam = (self.unnoise_B[path_B] - a).view(-1)
-
+        if self.opt.noise_loss_type == 'conditional' and isTest:
             # Compute histograms
-            hist_noise_ray = self.compute_histogram(noise_ray, self.bins_rayleigh)
-            hist_noise_gam = self.compute_histogram(noise_gam, self.bins_gamma)
+            sorted_normal_B = self.unnoise_B.keys()
+            sorted_normal_A = self.unnoise_A.keys()
 
-            # Normalize histograms
-            hist_noise_ray = hist_noise_ray / (hist_noise_ray.sum() + 1e-10)
-            hist_noise_gam = hist_noise_gam / (hist_noise_gam.sum() + 1e-10)
-
-            # Compute loss between histograms
-            wd_ray = torch.nn.functional.l1_loss(hist_noise_ray, self.emp_rayleigh_hist)
-            wd_gam = torch.nn.functional.l1_loss(hist_noise_gam, self.emp_gamma_hist)
+            for file_A, file_B in zip(sorted_normal_A, sorted_normal_B):
+                wd_ray = loss(model.netG_A(self.real_A[file_A]).view(-1), self.unnoise_A[file_A].view(-1), self.histograms_B, self.bins_rayleigh, self)
+                wd_gam = loss(model.netG_B(self.real_B[file_B]).view(-1), self.unnoise_B[file_B].view(-1), self.histograms_A, self.bins_gamma, self)
 
             noise_ray_total += wd_ray
             noise_gam_total += wd_gam
+        else:
+            for path_A, path_B in zip(model.paths['A'], model.paths['B']):
+                path_A = os.path.basename(path_A)
+                path_B = os.path.basename(path_B)
 
-        num_paths = len(model.paths['A'])
-        if num_paths == 0:
-            print("No paths found in model.paths['A'].")
-            return 0.0, 0.0
+                b = model.netG_A(self.real_A[path_A])
+                a = model.netG_B(self.real_B[path_B])
+
+                if self.opt.noise_loss_type == 'normal':
+                    # Compute noise for the generated images
+                    noise_ray = (b - self.unnoise_A[path_A]).view(-1)
+                    noise_gam = (self.unnoise_B[path_B] - a).view(-1)
+
+                    # Compute histograms
+                    hist_noise_ray = self.compute_histogram(noise_ray, self.bins_rayleigh)
+                    hist_noise_gam = self.compute_histogram(noise_gam, self.bins_gamma)
+
+                    # Normalize histograms
+                    hist_noise_ray = hist_noise_ray / (hist_noise_ray.sum() + 1e-10)
+                    hist_noise_gam = hist_noise_gam / (hist_noise_gam.sum() + 1e-10)
+
+                    # Compute loss between histograms
+                    wd_ray = torch.nn.functional.l1_loss(hist_noise_ray, self.emp_rayleigh_hist)
+                    wd_gam = torch.nn.functional.l1_loss(hist_noise_gam, self.emp_gamma_hist)
+
+                    noise_ray_total += wd_ray
+                    noise_gam_total += wd_gam
+                
+                if self.opt.noise_loss_type == 'conditional' and not isTest:
+                    # Compute histograms
+                    wd_ray = loss(b.view(-1), self.unnoise_A[path_A].view(-1), self.histograms_B, self.bins_rayleigh, self)
+                    wd_gam = loss(a.view(-1), self.unnoise_B[path_B].view(-1), self.histograms_A, self.bins_gamma, self)
+
+                    noise_ray_total += wd_ray
+                    noise_gam_total += wd_gam
+
+        num_paths = 0
+        if not isTest:
+            num_paths = len(model.paths['A'])
+            if num_paths == 0:
+                print("No paths found in model.paths['A'].")
+                return 0.0, 0.0
+        else:
+            num_paths = len(self.real_A)
+            if num_paths == 0:
+                print("No paths found in model.paths['A'].")
+                return 0.0, 0.0
 
         noisy_gam_avg = noise_gam_total / num_paths
         noisy_ray_avg = noise_ray_total / num_paths

@@ -36,6 +36,7 @@ from util import html
 import sonar.earth_movers
 import seperate_data as S
 import subprocess
+from models.emd_loss import DistanceCalc
 
 try:
     import wandb
@@ -84,4 +85,9 @@ if __name__ == '__main__':
     S.seperate(opt.name)
 
     print(dist_calc.earth_movers(1, model))
-    subprocess.call("bash fid.sh", shell=True)
+    # subprocess.call("bash fid.sh", shell=True)
+    if opt.noise_loss_type == 'conditional':
+        calc = DistanceCalc(model)
+        emd_A, emd_B = calc.earth_movers(model, True)
+        print(f'emd_A: {emd_A} emd_B: {emd_B}')
+
