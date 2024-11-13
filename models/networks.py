@@ -9,6 +9,11 @@ from torch.optim import lr_scheduler
 # Helper Functions
 ###############################################################################
 
+class Arctanh(nn.Module):
+    def __init__(self):
+        super(Arctanh, self).__init__()
+    def forward(self, x):
+        return torch.atanh(x)
 
 class Identity(nn.Module):
     def forward(self, x):
@@ -383,6 +388,8 @@ class NoiseGenerator(nn.Module):
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.ConvTranspose2d(64, 1, kernel_size=3, stride=1, padding=3, bias=False),
+            nn.Tanh(),
+            Arctanh(),
             nn.Conv2d(1, 64, kernel_size=3, stride=1, padding=3, bias=False),
             nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),

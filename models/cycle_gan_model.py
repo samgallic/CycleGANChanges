@@ -4,6 +4,7 @@ from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
 import models.emd_loss as emd_loss
+from models.clean import CleanLoss
 
 class CycleGANModel(BaseModel):
     """
@@ -98,6 +99,7 @@ class CycleGANModel(BaseModel):
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
             self.dist_calc = emd_loss.DistanceCalc(self)
+            self.clean_loss = CleanLoss(self)
 
     def set_input(self, input):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
@@ -158,7 +160,7 @@ class CycleGANModel(BaseModel):
             fake_A = self.fake_A_pool.query(self.fake_A)
             self.loss_D_B = self.backward_D_basic(self.netD_B, self.real_A, fake_A)
 
-    def backward_G(self):
+    def backward_G(self, epoch):
         """Calculate the loss for generators G_A and G_B"""
         lambda_idt = self.opt.lambda_identity
         lambda_A = self.opt.lambda_A
@@ -204,19 +206,22 @@ class CycleGANModel(BaseModel):
         else:
             self.loss_noise_A = 0.0
             self.loss_noise_B = 0.0
+
+        if self.opt.noise_loss_type == 'conditional' and epoch > 1 and self.opt.netG == 'noise':
+            self.clean_loss.clean_loss(self.opt, self.paths['A'], self.paths['B'], self)
         
         # combined loss and calculate gradients
         self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B + self.loss_noise_A + self.loss_noise_B
         self.loss_G.backward()
 
-    def optimize_parameters(self):
+    def optimize_parameters(self, epoch):
         """Calculate losses, gradients, and update network weights; called in every training iteration"""
         # forward
         self.forward()      # compute fake images and reconstruction images.
         # G_A and G_B
         self.set_requires_grad([self.netD_A, self.netD_B], False)  # Ds require no gradients when optimizing Gs
         self.optimizer_G.zero_grad()  # set G_A and G_B's gradients to zero
-        self.backward_G()        # calculate gradients for G_A and G_B
+        self.backward_G(epoch)        # calculate gradients for G_A and G_B
         self.optimizer_G.step()       # update G_A and G_B's weights
         # D_A and D_B
         self.set_requires_grad([self.netD_A, self.netD_B], True)
