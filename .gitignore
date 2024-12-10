@@ -5,6 +5,8 @@ checkpoints/
 results/
 build/
 dist/
+MSANN/
+MWCNN/
 *.png
 *.pkl
 *.csv
@@ -47,6 +49,7 @@ core.pt_main_thread-6-1728063914-7935-3746-c0900a-s11.ufhpc.4183482
 core.pt_main_thread-6-1728806929-7935-3746-c1007a-s23.ufhpc.2146416
 core.pt_main_thread-7-1720069973-7935-3746-c1110a-s23.ufhpc.527314
 core.pt_main_thread-7-1728299266-7935-3746-c0900a-s11.ufhpc.2833771 
+core.pt_main_thread-7-1733252597-7935-3746-c1101a-s35.ufhpc.2034033
 core.python-6-1724066597-7935-3746-c1001a-s17.ufhpc.2328525
 core.python-11-1718985327-7935-3746-c1106a-s35.ufhpc.347415 
 core.python-11-1718985327-7935-3746-c1106a-s35.ufhpc.347900

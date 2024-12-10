@@ -75,7 +75,7 @@ def plot_pdf_with_rayleigh(data, data_emp, title, save_path):
     plt.ylabel('Density')
     plt.legend()
     plt.grid(True)
-    plt.xlim([flat_data.min().item(), flat_data.max().item()])
+    plt.xlim([-2, 2])
     
     # Save the plot as a PNG file
     plt.savefig(save_path, format='png', bbox_inches='tight')

@@ -6,11 +6,11 @@ def combine(name):
 
     # Paths to your 5 images
     image_paths_A = [path_A + "Epoch_1_Rayleigh.png", path_A + "Epoch_50_Rayleigh.png", 
-                path_A + "Epoch_100_Rayleigh.png", path_A + "Epoch_150_Rayleigh.png", 
-                path_A + "Epoch_200_Rayleigh.png"]
+                path_A + "Epoch_100_Rayleigh.png", path_A + "Epoch_200_Rayleigh.png", 
+                path_A + "Epoch_250_Rayleigh.png"]
     image_paths_B = [path_B + "Epoch_1_Gamma.png", path_B + "Epoch_50_Gamma.png", 
-                path_B + "Epoch_100_Gamma.png", path_B + "Epoch_150_Gamma.png", 
-                path_B + "Epoch_200_Gamma.png"]
+                path_B + "Epoch_100_Gamma.png", path_B + "Epoch_200_Gamma.png", 
+                path_B + "Epoch_250_Gamma.png"]
 
     # Load the images
     images_A = [Image.open(img) for img in image_paths_A]
@@ -55,3 +55,4 @@ def combine(name):
     # Save or show the final image
     final_image_B.save(path_B + 'final_rayleigh2gamma.png')
     
+combine('black_debugged_no_disc')

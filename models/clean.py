@@ -39,7 +39,7 @@ def get_intermediate_output(model, layer_index, input_tensor):
         intermediate_output = output
 
     # Register the hook on the desired layer
-    handle = model.model[layer_index].register_forward_hook(hook)
+    handle = model.module.model[layer_index].register_forward_hook(hook)
     
     # Run the forward pass
     _ = model(input_tensor)
@@ -98,16 +98,22 @@ class CleanLoss():
 
     def clean_loss(self, opt, paths_A, paths_B, model):
         # Replace 'your_model_name' with the actual name you want to use
-        generator_A, generator_B = load_generators(opt.name)
+        generator_A = copy.deepcopy(model.netG_A)
+        generator_B = copy.deepcopy(model.netG_B)
         generator_A.to(model.device)
         generator_B.to(model.device)
         clean_A = {}
         clean_B = {}
+        loss_A = 0.0
+        loss_B = 0.0
         os.makedirs('clean', exist_ok=True)
         for path_A, path_B in zip(paths_A, paths_B):
             path_A = os.path.basename(path_A)
             path_B = os.path.basename(path_B)
-            clean_A[path_A] = get_intermediate_output(generator_A, 4, self.real_A[path_A])
+            clean_A[path_A] = get_intermediate_output(generator_A, 12, self.real_A[path_A])
             Image.fromarray(tensor2im(clean_A[path_A])).save(f'clean/{path_A}')
-            clean_B[path_B] = get_intermediate_output(generator_B, 4, self.real_B[path_B])
+            clean_B[path_B] = get_intermediate_output(generator_B, 12, self.real_B[path_B])
             Image.fromarray(tensor2im(clean_B[path_B])).save(f'clean/{path_B}')
+            loss_A = torch.abs(clean_A[path_A] - self.unnoise_A[path_A]).mean()
+            loss_B = torch.abs(clean_B[path_B] - self.unnoise_B[path_B]).mean()
+        return loss_A / len(path_A), loss_B / len(path_B)

@@ -34,7 +34,7 @@ class DistanceCalc:
 
         self.dataset = UnalignedDataset(self.opt)
         new_opt = copy.deepcopy(self.opt)
-        new_opt.dataroot = '/blue/azare/samgallic/Research/new_cycle_gan/datasets/gray_forest'
+        new_opt.dataroot = '/blue/azare/samgallic/Research/new_cycle_gan/' + model.opt.dataroot_clean
         transform_A = self.dataset.transform_A
         transform_B = self.dataset.transform_B
 
@@ -62,6 +62,7 @@ class DistanceCalc:
             self.unnoise_A[filename] = normal.to(model.device)
             noise = gamma - normal
             noises_A.append(noise)
+            # noises_A.append(gamma)
         
         for filename, img in real_B_pil.items():
             if filename not in unnoise_B_pil:
@@ -73,6 +74,7 @@ class DistanceCalc:
             self.unnoise_B[filename] = normal.to(model.device)
             noise = rayleigh - normal
             noises_B.append(noise)
+            # noises_B.append(rayleigh)
         
         # Store the entire distribution of noises as 1D tensors
         self.emp_gamma = torch.cat(noises_A).view(-1).float().to(model.device)
@@ -82,8 +84,8 @@ class DistanceCalc:
         self.emp_gamma = self.emp_gamma[indices]
         self.emp_rayleigh = self.emp_rayleigh[indices]
 
-        self.num_bins = 256
-        self.bandwidth = torch.tensor(0.1, device=model.device)
+        self.num_bins = 64
+        self.bandwidth = torch.tensor(1.0, device=model.device)
         self.compute_bins()
 
         if(self.opt.noise_loss_type == 'normal'):
@@ -92,8 +94,6 @@ class DistanceCalc:
         elif(self.opt.noise_loss_type == 'conditional'):
             self.histograms_A = ConditionalHists(self.real_A, self.unnoise_A, self.bins_gamma, self)
             self.histograms_B = ConditionalHists(self.real_B, self.unnoise_B, self.bins_rayleigh, self)
-            print('I did it :)')
-            AssertionError('I stop :)')
         else:
             AssertionError('Loss type not recognized')
 
@@ -150,19 +150,27 @@ class DistanceCalc:
                 if self.opt.noise_loss_type == 'normal':
                     # Compute noise for the generated images
                     noise_ray = (b - self.unnoise_A[path_A]).view(-1)
-                    noise_gam = (self.unnoise_B[path_B] - a).view(-1)
+                    noise_gam = (a - self.unnoise_B[path_B]).view(-1)
+                    print(noise_ray)
+                    print(noise_gam)
 
                     # Compute histograms
                     hist_noise_ray = self.compute_histogram(noise_ray, self.bins_rayleigh)
                     hist_noise_gam = self.compute_histogram(noise_gam, self.bins_gamma)
+                    print(hist_noise_ray)
+                    print(hist_noise_gam)
 
                     # Normalize histograms
                     hist_noise_ray = hist_noise_ray / (hist_noise_ray.sum() + 1e-10)
                     hist_noise_gam = hist_noise_gam / (hist_noise_gam.sum() + 1e-10)
+                    print(hist_noise_ray)
+                    print(hist_noise_gam)
 
                     # Compute loss between histograms
                     wd_ray = torch.nn.functional.l1_loss(hist_noise_ray, self.emp_rayleigh_hist)
                     wd_gam = torch.nn.functional.l1_loss(hist_noise_gam, self.emp_gamma_hist)
+                    print(wd_ray)
+                    print(wd_gam)
 
                     noise_ray_total += wd_ray
                     noise_gam_total += wd_gam

@@ -45,7 +45,7 @@ class DistanceCalc:
 
         self.dataset = UnalignedDataset(self.opt)
         new_opt = copy.deepcopy(self.opt)
-        new_opt.dataroot = '/blue/azare/samgallic/Research/new_cycle_gan/datasets/gray_forest'
+        new_opt.dataroot = '/blue/azare/samgallic/Research/new_cycle_gan/' + model.opt.dataroot_clean
         transform_A = self.dataset.transform_A
         transform_B = self.dataset.transform_B
 
@@ -78,6 +78,7 @@ class DistanceCalc:
             self.unnoise_A[filename] = normal.to(model.device)
             noise = gamma - normal
             noises_A.append(noise)
+            # noises_A.append(gamma)
         for filename, img in real_B_pil.items():
             normal = transform_B(unnoise_B_pil[filename])
             rayleigh = transform_B(img)
@@ -85,6 +86,7 @@ class DistanceCalc:
             self.unnoise_B[filename] = normal.to(model.device)
             noise = rayleigh - normal
             noises_B.append(noise)
+            # noises_B.append(rayleigh)
         self.emp_gamma = torch.cat(noises_A)
         self.emp_rayleigh = torch.cat(noises_B)
 
@@ -113,7 +115,7 @@ class DistanceCalc:
 
         # Calculate noises in batches for the fake images
         noisy_gamma = self._calculate_noises_batch(self.unnoise_A, fake_B)
-        noisy_rayleigh = self._calculate_noises_batch(fake_A, self.unnoise_B)
+        noisy_rayleigh = self._calculate_noises_batch(self.unnoise_B, fake_A)
         self.emp_rayleigh = self.emp_rayleigh.cpu()
         self.emp_gamma = self.emp_gamma.cpu()
         noisy_gamma = noisy_gamma.cpu()
