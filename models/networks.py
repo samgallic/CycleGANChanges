@@ -3,7 +3,8 @@ import torch.nn as nn
 from torch.nn import init
 import functools
 from torch.optim import lr_scheduler
-
+from Histogram_Layer.Utils.RBFHistogramPooling import HistogramLayer
+import random
 
 ###############################################################################
 # Helper Functions
@@ -162,6 +163,8 @@ def define_G(input_nc, output_nc, ngf, netG, norm='batch', use_dropout=False, in
         net = UnetGenerator(input_nc, output_nc, 8, ngf, norm_layer=norm_layer, use_dropout=use_dropout)
     elif netG == 'noise':
         net = NoiseGenerator()
+    elif netG == 'hist':
+        net = HistGenerator(input_nc, output_nc, ngf, norm_layer=norm_layer, use_dropout=use_dropout, n_blocks=3)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     return init_net(net, init_type, init_gain, gpu_ids)
@@ -318,6 +321,33 @@ def cal_gradient_penalty(netD, real_data, fake_data, device, type='mixed', const
         return gradient_penalty, gradients
     else:
         return 0.0, None
+
+class HistGenerator(nn.Module):
+    """Histogram-based generator using histogram layers."""
+
+    def __init__(self, input_nc, output_nc, ngf=64, norm_layer=nn.BatchNorm2d, use_dropout=False, n_blocks=6, padding_type='reflect', num_bins=16):
+        """Construct a histogram-based generator using histogram layers."""
+        super(HistGenerator, self).__init__()
+        self.hist_layer = HistogramLayer(in_channels=1, kernel_size=3, num_bins=64)
+        self.model = nn.Sequential(self.hist_layer)
+
+    def forward(self, input):
+        # Generate random bins for the entire input tensor
+        rand_bins = torch.randint(0, 64, input.shape, device=input.device)
+
+        # Get centers and widths for the selected bins
+        centers = self.hist_layer.centers[rand_bins]
+        widths = self.hist_layer.widths[rand_bins]
+
+        widths = widths.squeeze()  # Remove all dimensions of size 1
+        # Add back necessary dimensions to match input
+        widths = widths.view(input.shape)
+        
+        # Generate random values from Gaussian distributions
+        random_values = torch.normal(mean=centers, std=abs(widths))
+
+        # Add the random values to the input tensor
+        return random_values
 
 
 class ResnetGenerator(nn.Module):

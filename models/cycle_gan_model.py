@@ -4,7 +4,6 @@ from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
 import models.emd_loss as emd_loss
-from models.clean import CleanLoss
 
 class CycleGANModel(BaseModel):
     """
@@ -77,6 +76,8 @@ class CycleGANModel(BaseModel):
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
         self.netG_B = networks.define_G(opt.output_nc, opt.input_nc, opt.ngf, opt.netG, opt.norm,
                                         not opt.no_dropout, opt.init_type, opt.init_gain, self.gpu_ids)
+        
+        print(self.netG_A)
 
         if self.isTrain:  # define discriminators
             self.netD_A = networks.define_D(opt.output_nc, opt.ndf, opt.netD,
@@ -99,7 +100,6 @@ class CycleGANModel(BaseModel):
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
             self.dist_calc = emd_loss.DistanceCalc(self)
-            self.clean_loss = CleanLoss(self)
 
     def set_input(self, input):
         """Unpack input data from the dataloader and perform necessary pre-processing steps.
@@ -117,9 +117,9 @@ class CycleGANModel(BaseModel):
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
+        self.fake_A = self.netG_B(self.real_B)  # G_B(B)
         self.fake_B = self.netG_A(self.real_A)  # G_A(A)
         self.rec_A = self.netG_B(self.fake_B)   # G_B(G_A(A))
-        self.fake_A = self.netG_B(self.real_B)  # G_B(B)
         self.rec_B = self.netG_A(self.fake_A)   # G_A(G_B(B))
 
     def backward_D_basic(self, netD, real, fake):
@@ -209,8 +209,6 @@ class CycleGANModel(BaseModel):
 
         # combined loss and calculate gradients
         self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B + self.loss_noise_A + self.loss_noise_B
-        print(self.loss_noise_A)
-        print(self.loss_G)
         self.loss_G.backward()
 
     def optimize_parameters(self, epoch):

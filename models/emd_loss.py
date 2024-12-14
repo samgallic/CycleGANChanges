@@ -53,28 +53,20 @@ class DistanceCalc:
         
         # Process images and compute noises
         for filename, img in real_A_pil.items():
-            if filename not in unnoise_A_pil:
-                print(f"Warning: {filename} not found in unnoise_A_pil")
-                continue
             normal = transform_A(unnoise_A_pil[filename])
             gamma = transform_A(img)
             self.real_A[filename] = gamma.to(model.device)
             self.unnoise_A[filename] = normal.to(model.device)
             noise = gamma - normal
             noises_A.append(noise)
-            # noises_A.append(gamma)
         
         for filename, img in real_B_pil.items():
-            if filename not in unnoise_B_pil:
-                print(f"Warning: {filename} not found in unnoise_B_pil")
-                continue
             normal = transform_B(unnoise_B_pil[filename])
             rayleigh = transform_B(img)
             self.real_B[filename] = rayleigh.to(model.device)
             self.unnoise_B[filename] = normal.to(model.device)
             noise = rayleigh - normal
             noises_B.append(noise)
-            # noises_B.append(rayleigh)
         
         # Store the entire distribution of noises as 1D tensors
         self.emp_gamma = torch.cat(noises_A).view(-1).float().to(model.device)
@@ -157,20 +149,14 @@ class DistanceCalc:
                     # Compute histograms
                     hist_noise_ray = self.compute_histogram(noise_ray, self.bins_rayleigh)
                     hist_noise_gam = self.compute_histogram(noise_gam, self.bins_gamma)
-                    print(hist_noise_ray)
-                    print(hist_noise_gam)
 
                     # Normalize histograms
                     hist_noise_ray = hist_noise_ray / (hist_noise_ray.sum() + 1e-10)
                     hist_noise_gam = hist_noise_gam / (hist_noise_gam.sum() + 1e-10)
-                    print(hist_noise_ray)
-                    print(hist_noise_gam)
 
                     # Compute loss between histograms
                     wd_ray = torch.nn.functional.l1_loss(hist_noise_ray, self.emp_rayleigh_hist)
                     wd_gam = torch.nn.functional.l1_loss(hist_noise_gam, self.emp_gamma_hist)
-                    print(wd_ray)
-                    print(wd_gam)
 
                     noise_ray_total += wd_ray
                     noise_gam_total += wd_gam
